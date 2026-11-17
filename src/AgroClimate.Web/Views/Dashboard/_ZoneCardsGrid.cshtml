@@ -1,0 +1,127 @@
+@model DashboardViewModel
+
+@if (Model.Zones.Count == 0)
+{
+    <div class="mc-card" style="text-align:center;padding:2.2rem;">
+        <div style="font-size:1.05rem;font-weight:700;">Нет объектов, соответствующих выбранному фильтру</div>
+        <div style="color:var(--text-secondary);margin-top:0.35rem;">Сбросьте фильтр на «Все объекты ИрГАУ», чтобы отобразить полную карту телеметрии.</div>
+    </div>
+}
+else
+{
+    <div class="zones-grid">
+        @foreach (var zone in Model.Zones)
+        {
+            var p = zone.AgroProfile;
+            Model.ActiveIncidentByZone.TryGetValue(zone.Id, out var activeInc);
+
+            string cardClass = !zone.IsSensorOnline || zone.CurrentComplianceState == ComplianceState.Offline
+                ? "mc-card mc-card-offline"
+                : zone.CurrentComplianceState == ComplianceState.Critical
+                    ? "mc-card mc-card-critical"
+                    : zone.CurrentComplianceState == ComplianceState.Warning
+                        ? "mc-card mc-card-warning"
+                        : "mc-card";
+
+            string dotClass = !zone.IsSensorOnline || zone.CurrentComplianceState == ComplianceState.Offline
+                ? "status-dot offline"
+                : zone.CurrentComplianceState == ComplianceState.Critical
+                    ? "status-dot critical"
+                    : zone.CurrentComplianceState == ComplianceState.Warning
+                        ? "status-dot warning"
+                        : "status-dot optimal";
+
+            string badgeClass = !zone.IsSensorOnline || zone.CurrentComplianceState >= ComplianceState.Critical
+                ? "mc-badge mc-badge-critical"
+                : zone.CurrentComplianceState == ComplianceState.Warning
+                    ? "mc-badge mc-badge-warning"
+                    : "mc-badge mc-badge-optimal";
+
+            string badgeText = !zone.IsSensorOnline || zone.CurrentComplianceState == ComplianceState.Offline
+                ? "ОБРЫВ СВЯЗИ"
+                : zone.CurrentComplianceState == ComplianceState.Critical
+                    ? "КРИТИЧЕСКАЯ ТРЕВОГА"
+                    : zone.CurrentComplianceState == ComplianceState.Warning
+                        ? "ОТКЛОНЕНИЕ / ТРЕНД"
+                        : "В НОРМЕ";
+
+            var irkutskTime = zone.LastTelemetryUtc?.AddHours(8).ToString("HH:mm:ss") ?? "—";
+
+            <article class="@cardClass" data-zone-card="@zone.Id">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem;">
+                    <div>
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <span data-zone-dot class="@dotClass"></span>
+                            <h3 style="margin:0;font-size:1.02rem;font-weight:800;">@zone.Name</h3>
+                        </div>
+                        <div style="font-size:0.76rem;color:var(--text-secondary);margin-top:0.18rem;">
+                            📍 @zone.LocationCampus • <code>@zone.ControllerNodeId</code> (@zone.AreaOrVolume @zone.AreaUnit)
+                        </div>
+                    </div>
+                    <span data-zone-badge class="@badgeClass">@badgeText</span>
+                </div>
+
+                @if (p is not null)
+                {
+                    <div style="margin-top:0.6rem;padding:0.45rem 0.65rem;border-radius:8px;background:var(--bg-surface-muted);display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;font-size:0.77rem;">
+                        <span>🌿 <strong>@p.CropName</strong> <span style="color:var(--text-secondary);">(@p.GrowthStage)</span></span>
+                        <span class="tabular" style="color:var(--accent-emerald);font-weight:600;">
+                            Норма T°: @p.TargetTempMin.ToString("F1")..@p.TargetTempMax.ToString("F1")°C
+                        </span>
+                    </div>
+                }
+
+                <!-- Живая матрица показателей микроклимата (обновляется по SignalR без перезагрузки) -->
+                <div class="metric-matrix tabular">
+                    <div class="metric-cell">
+                        <div class="metric-cell-label">Темп. T°</div>
+                        <div class="metric-cell-val" data-val-temp>@zone.CurrentTempC.ToString("F1")</div>
+                        <div class="metric-cell-unit">°C</div>
+                    </div>
+                    <div class="metric-cell">
+                        <div class="metric-cell-label">Влажн. RH</div>
+                        <div class="metric-cell-val" data-val-hum>@zone.CurrentHumidityPercent.ToString("F1")</div>
+                        <div class="metric-cell-unit">%</div>
+                    </div>
+                    <div class="metric-cell">
+                        <div class="metric-cell-label">CO₂</div>
+                        <div class="metric-cell-val" data-val-co2>@zone.CurrentCo2Ppm.ToString("F0")</div>
+                        <div class="metric-cell-unit">ppm</div>
+                    </div>
+                    <div class="metric-cell" title="Точка росы (формула Магнуса-Тетенса)">
+                        <div class="metric-cell-label">Точка росы</div>
+                        <div class="metric-cell-val" data-val-dp>@zone.CurrentDewPointC.ToString("F1")</div>
+                        <div class="metric-cell-unit">°C Tdp</div>
+                    </div>
+                    <div class="metric-cell" title="Дефицит упругости водяного пара (Vapor Pressure Deficit)">
+                        <div class="metric-cell-label">VPD</div>
+                        <div class="metric-cell-val" data-val-vpd>@zone.CurrentVpdKpa.ToString("F2")</div>
+                        <div class="metric-cell-unit">кПа</div>
+                    </div>
+                </div>
+
+                <div style="font-size:0.79rem;color:var(--text-secondary);min-height:2.2em;" data-val-note>
+                    @zone.StatusNote
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;margin-top:0.75rem;padding-top:0.65rem;border-top:1px solid var(--border-subtle);">
+                    <div class="tabular" style="font-size:0.75rem;color:var(--text-muted);">
+                        Тренд: <strong data-val-vel style="color:var(--text-secondary);">@(zone.CurrentTempVelocityPerMin >= 0 ? "+" : "")@zone.CurrentTempVelocityPerMin.ToString("F2") °C/мин</strong>
+                        • Пакет: <span data-val-time>@irkutskTime</span>
+                    </div>
+
+                    <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
+                        <span data-warroom-slot>
+                            @if (activeInc is not null)
+                            {
+                                <a href="/Incidents/WarRoom/@activeInc.Id" class="mc-btn mc-btn-danger mc-btn-sm">🚨 War Room #@activeInc.Id</a>
+                            }
+                        </span>
+                        <a href="/Analytics?zoneId=@zone.Id&hours=6" class="mc-btn mc-btn-sm">📈 Тренды</a>
+                        <a href="/Profiles?id=@zone.AgroProfileId" class="mc-btn mc-btn-sm">⚙ Нормы</a>
+                    </div>
+                </div>
+            </article>
+        }
+    </div>
+}

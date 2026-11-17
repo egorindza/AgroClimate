@@ -1,0 +1,50 @@
+@model IReadOnlyList<WindowTrendAnomalyDto>
+
+<div style="overflow-x:auto;">
+    <table class="mc-table tabular">
+        <thead>
+            <tr>
+                <th>Объект ИрГАУ</th>
+                <th>Текущая T°</th>
+                <th>LAG (пред.) / Δ</th>
+                <th>FIRST_VALUE (окно)</th>
+                <th>AVG (скольз. среднее)</th>
+                <th>STDEV (СКО σ)</th>
+                <th>Скорость тренда</th>
+                <th>RH% / CO₂</th>
+                <th>Вердикт раннего обнаружения</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in Model)
+            {
+                string velColor = r.IsEarlyAnomaly ? "var(--accent-red)" : "var(--accent-emerald)";
+                <tr>
+                    <td style="font-weight:700;">@r.ZoneName</td>
+                    <td style="font-weight:800;">@r.LatestTempC.ToString("F2") °C</td>
+                    <td>
+                        @r.PrevTempC.ToString("F2") °C
+                        <span style="color:var(--text-secondary);">(@(r.StepDeltaC >= 0 ? "+" : "")@r.StepDeltaC.ToString("F2"))</span>
+                    </td>
+                    <td>@r.WindowFirstTempC.ToString("F2") °C</td>
+                    <td>@r.MovingAvgTempC.ToString("F2") °C</td>
+                    <td>±@r.MovingStdDevTempC.ToString("F3") °C</td>
+                    <td style="font-weight:800;color:@velColor;">
+                        @(r.WindowVelocityPerMin >= 0 ? "+" : "")@r.WindowVelocityPerMin.ToString("F2") °C/мин
+                    </td>
+                    <td>@r.LatestHumidityPercent.ToString("F1")% / @r.LatestCo2Ppm.ToString("F0") ppm</td>
+                    <td>
+                        @if (r.IsEarlyAnomaly)
+                        {
+                            <span class="mc-badge mc-badge-critical">@r.TrendVerdict</span>
+                        }
+                        else
+                        {
+                            <span class="mc-badge mc-badge-optimal">@r.TrendVerdict</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

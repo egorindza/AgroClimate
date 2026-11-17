@@ -1,0 +1,73 @@
+@model IncidentsIndexViewModel
+@{
+    ViewData["Title"] = "Журнал инцидентов и War Room";
+}
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+    <div>
+        <h1 style="margin:0;font-size:1.28rem;font-weight:800;">🚨 Центр управления инцидентами (Incident War Room)</h1>
+        <div style="font-size:0.82rem;color:var(--text-secondary);">
+            Жизненный цикл аварий микроклимата ИрГАУ, регламенты реагирования дежурной смены и выгрузка актов Postmortem PDF
+        </div>
+    </div>
+    <a href="/" class="mc-btn">🎛 Запустить аварийный сценарий на карте</a>
+</div>
+
+<div class="kpi-grid tabular">
+    <div class="kpi-tile">
+        <div class="kpi-label">Активные тревоги</div>
+        <div class="kpi-value" style="color:@(Model.ActiveCount > 0 ? "var(--accent-red)" : "var(--accent-emerald)");">
+            @Model.ActiveCount
+        </div>
+        <div class="kpi-sub">Открытые комнаты оперативного реагирования</div>
+    </div>
+    <div class="kpi-tile">
+        <div class="kpi-label">Устранено в архиве</div>
+        <div class="kpi-value">@Model.ResolvedCount</div>
+        <div class="kpi-sub">Доступны полные Postmortem PDF-акты ИрГАУ</div>
+    </div>
+    <div class="kpi-tile">
+        <div class="kpi-label">Среднее время реакции (MTTA)</div>
+        <div class="kpi-value" style="color:var(--accent-cyan);">@Model.AvgMttaMinutes.ToString("F1") мин</div>
+        <div class="kpi-sub">От открытия тревоги до Acknowledge сменой</div>
+    </div>
+    <div class="kpi-tile">
+        <div class="kpi-label">Среднее время устранения (MTTR)</div>
+        <div class="kpi-value" style="color:var(--accent-emerald);">@Model.AvgMttrMinutes.ToString("F1") мин</div>
+        <div class="kpi-sub">Полная стабилизация зеленого коридора</div>
+    </div>
+</div>
+
+<!-- Панель фильтрации на HTMX -->
+<div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;flex-wrap:wrap;margin-bottom:0.85rem;">
+    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;" id="inc-filter-group">
+        <button type="button" class="mc-btn mc-btn-sm @(Model.StatusFilter == "all" ? "mc-btn-primary" : "")"
+                hx-get="/Incidents/ListPartial?status=all" hx-target="#incidents-table-host" hx-swap="innerHTML"
+                onclick="highlightIncFilter(this)">Все инциденты</button>
+        <button type="button" class="mc-btn mc-btn-sm @(Model.StatusFilter == "active" ? "mc-btn-primary" : "")"
+                hx-get="/Incidents/ListPartial?status=active" hx-target="#incidents-table-host" hx-swap="innerHTML"
+                onclick="highlightIncFilter(this)">🔥 Только активные</button>
+        <button type="button" class="mc-btn mc-btn-sm @(Model.StatusFilter == "resolved" ? "mc-btn-primary" : "")"
+                hx-get="/Incidents/ListPartial?status=resolved" hx-target="#incidents-table-host" hx-swap="innerHTML"
+                onclick="highlightIncFilter(this)">✅ Архив завершенных</button>
+        <button type="button" class="mc-btn mc-btn-sm"
+                hx-get="/Incidents/ListPartial?status=all&severity=Emergency" hx-target="#incidents-table-host" hx-swap="innerHTML"
+                onclick="highlightIncFilter(this)">⚡ Emergency</button>
+        <button type="button" class="mc-btn mc-btn-sm"
+                hx-get="/Incidents/ListPartial?status=all&severity=Critical" hx-target="#incidents-table-host" hx-swap="innerHTML"
+                onclick="highlightIncFilter(this)">🔴 Critical</button>
+    </div>
+</div>
+
+<div id="incidents-table-host">
+    @await Html.PartialAsync("_IncidentsTable", Model)
+</div>
+
+@section Scripts {
+    <script>
+        function highlightIncFilter(btn) {
+            document.querySelectorAll("#inc-filter-group .mc-btn").forEach(b => b.classList.remove("mc-btn-primary"));
+            btn.classList.add("mc-btn-primary");
+        }
+    </script>
+}

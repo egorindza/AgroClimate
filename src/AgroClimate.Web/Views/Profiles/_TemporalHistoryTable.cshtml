@@ -1,0 +1,61 @@
+@model IReadOnlyList<AgroProfileTemporalHistoryDto>
+
+<div style="overflow-x:auto;">
+    <table class="mc-table tabular">
+        <thead>
+            <tr>
+                <th>Статус ревизии</th>
+                <th>Культура / Фаза</th>
+                <th>Целевой T°</th>
+                <th>Крит. T°</th>
+                <th>Влажность RH</th>
+                <th>Крит. CO₂</th>
+                <th>Grace / Запас</th>
+                <th>Кто утвердил / изменил</th>
+                <th>Период действия (UTC+8 ИРК)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model)
+            {
+                <tr>
+                    <td>
+                        @if (row.IsCurrent)
+                        {
+                            <span class="mc-badge mc-badge-optimal">АКТУАЛЬНАЯ</span>
+                        }
+                        else
+                        {
+                            <span class="mc-badge mc-badge-info">АРХИВ HISTORY</span>
+                        }
+                    </td>
+                    <td>
+                        <div style="font-weight:700;">@row.CropName</div>
+                        <div style="font-size:0.74rem;color:var(--text-secondary);">@row.GrowthStage</div>
+                    </td>
+                    <td style="color:var(--accent-emerald);font-weight:700;">
+                        @row.TargetTempMin.ToString("F1")..@row.TargetTempMax.ToString("F1") °C
+                    </td>
+                    <td style="color:var(--accent-red);">
+                        @row.CritTempMin.ToString("F1") / @row.CritTempMax.ToString("F1") °C
+                    </td>
+                    <td>@row.TargetHumidityMin.ToString("F0")..@row.TargetHumidityMax.ToString("F0") %</td>
+                    <td>@row.CritCo2Max.ToString("F0") ppm</td>
+                    <td>@row.GracePeriodSeconds с / @row.BaseTimeToDamageMinutes мин</td>
+                    <td style="font-weight:600;">@row.LastModifiedBy</td>
+                    <td style="font-size:0.78rem;">
+                        <div>с @row.ValidFromUtc.AddHours(8).ToString("dd.MM.yyyy HH:mm:ss")</div>
+                        @if (!row.IsCurrent)
+                        {
+                            <div style="color:var(--text-muted);">до @row.ValidToUtc.AddHours(8).ToString("dd.MM.yyyy HH:mm:ss")</div>
+                        }
+                        else
+                        {
+                            <div style="color:var(--accent-emerald);">по настоящее время</div>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

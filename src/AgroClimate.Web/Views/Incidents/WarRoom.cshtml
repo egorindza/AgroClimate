@@ -1,0 +1,369 @@
+@model WarRoomViewModel
+@{
+    var inc = Model.Incident;
+    var zone = inc.Zone;
+    var snap = Model.HistoricalProfileSnapshot;
+    ViewData["Title"] = $"War Room {inc.IncidentNumber}";
+}
+
+<div id="warroom-root" data-incident-id="@inc.Id" data-zone-id="@inc.ZoneId">
+    @if (TempData["WarRoomError"] is string err)
+    {
+        <div class="mc-card mc-card-critical" style="margin-bottom:0.9rem;padding:0.75rem 1rem;color:var(--accent-red);font-weight:600;">
+            ⚠️ @err
+        </div>
+    }
+    @if (TempData["WarRoomSuccess"] is string ok)
+    {
+        <div class="mc-card" style="margin-bottom:0.9rem;padding:0.75rem 1rem;border-color:var(--accent-emerald);color:var(--accent-emerald);font-weight:600;">
+            ✅ @ok
+        </div>
+    }
+
+    <div id="wr-header-host">
+        @await Html.PartialAsync("_WarRoomStatusHeader", inc)
+    </div>
+
+    <div class="warroom-grid">
+        <!-- Левая колонка: Живая телеметрия зоны, Чек-лист регламента, Закрытие / Акт -->
+        <div>
+            @if (zone is not null)
+            {
+                <div class="mc-card" style="margin-bottom:1.1rem;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+                        <div>
+                            <h2 style="margin:0;font-size:1.02rem;font-weight:800;">📡 Живой поток телеметрии зоны: @zone.Name</h2>
+                            <div style="font-size:0.77rem;color:var(--text-secondary);">
+                                Контроллер <code>@zone.ControllerNodeId</code> • Стриминг в реальном времени по SignalR
+                            </div>
+                        </div>
+                        <span id="wr-sensor-state" class="mc-badge @(zone.IsSensorOnline ? "mc-badge-optimal" : "mc-badge-critical")">
+                            @(zone.IsSensorOnline ? "ДАТЧИК НА СВЯЗИ" : "ПОТЕРЯ СИГНАЛА")
+                        </span>
+                    </div>
+
+                    <div class="metric-matrix tabular">
+                        <div class="metric-cell">
+                            <div class="metric-cell-label">Текущая T°</div>
+                            <div class="metric-cell-val" id="wr-live-temp">@zone.CurrentTempC.ToString("F1")</div>
+                            <div class="metric-cell-unit">°C (на старте @inc.InitialTempC.ToString("F1")°C)</div>
+                        </div>
+                        <div class="metric-cell">
+                            <div class="metric-cell-label">Влажность</div>
+                            <div class="metric-cell-val" id="wr-live-hum">@zone.CurrentHumidityPercent.ToString("F1")</div>
+                            <div class="metric-cell-unit">% RH</div>
+                        </div>
+                        <div class="metric-cell">
+                            <div class="metric-cell-label">CO₂</div>
+                            <div class="metric-cell-val" id="wr-live-co2">@zone.CurrentCo2Ppm.ToString("F0")</div>
+                            <div class="metric-cell-unit">ppm</div>
+                        </div>
+                        <div class="metric-cell">
+                            <div class="metric-cell-label">Точка росы</div>
+                            <div class="metric-cell-val" id="wr-live-dp">@zone.CurrentDewPointC.ToString("F1")</div>
+                            <div class="metric-cell-unit">°C Tdp</div>
+                        </div>
+                        <div class="metric-cell">
+                            <div class="metric-cell-label">VPD</div>
+                            <div class="metric-cell-val" id="wr-live-vpd">@zone.CurrentVpdKpa.ToString("F2")</div>
+                            <div class="metric-cell-unit">кПа</div>
+                        </div>
+                    </div>
+
+                    <div style="height:195px;margin-top:0.5rem;">
+                        <canvas id="wr-live-chart"></canvas>
+                    </div>
+                </div>
+            }
+
+            <div id="wr-checklist-host">
+                @await Html.PartialAsync("_WarRoomChecklist", inc)
+            </div>
+
+            <!-- Аудит норм Temporal Table (SYSTEM_VERSIONING = ON) на момент инцидента -->
+            <div class="mc-card" style="margin-bottom:1.1rem;border-color:rgba(16, 185, 129, 0.35);">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+                    <h2 style="margin:0;font-size:0.98rem;font-weight:800;">
+                        🕰 Снимок норм SQL Server Temporal Table (<code>FOR SYSTEM_TIME AS OF</code>)
+                    </h2>
+                    <span class="mc-badge mc-badge-optimal">SYSTEM_VERSIONING = ON</span>
+                </div>
+                @if (snap is not null)
+                {
+                    <div style="font-size:0.82rem;color:var(--text-secondary);">
+                        На момент открытия аварии (<strong>@inc.OpenedAtUtc.AddHours(8).ToString("dd.MM.yyyy HH:mm:ss") ИРК</strong>) для культуры
+                        <strong style="color:var(--text-primary);">@snap.CropName (@snap.GrowthStage)</strong> действовали пороги:
+                    </div>
+                    <div class="tabular" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:0.55rem;margin-top:0.65rem;font-size:0.81rem;">
+                        <div style="padding:0.45rem 0.6rem;border-radius:8px;background:var(--bg-surface-muted);">
+                            Целевой T°: <strong>@snap.TargetTempMin.ToString("F1")..@snap.TargetTempMax.ToString("F1") °C</strong><br />
+                            Крит. T°: <span style="color:var(--accent-red);">@snap.CritTempMin.ToString("F1")..@snap.CritTempMax.ToString("F1") °C</span>
+                        </div>
+                        <div style="padding:0.45rem 0.6rem;border-radius:8px;background:var(--bg-surface-muted);">
+                            Влажность RH: <strong>@snap.TargetHumidityMin.ToString("F0")..@snap.TargetHumidityMax.ToString("F0") %</strong><br />
+                            Крит. CO₂: <strong>@snap.CritCo2Max.ToString("F0") ppm</strong>
+                        </div>
+                        <div style="padding:0.45rem 0.6rem;border-radius:8px;background:var(--bg-surface-muted);">
+                            Целевой VPD: <strong>@snap.TargetVpdMin.ToString("F2")..@snap.TargetVpdMax.ToString("F2") кПа</strong><br />
+                            Grace Period: <strong>@snap.GracePeriodSeconds с</strong>
+                        </div>
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;">
+                        Автор ревизии норм: <strong>@snap.LastModifiedBy</strong> • Ревизия активна с @snap.ValidFromUtc.AddHours(8).ToString("dd.MM.yyyy HH:mm")
+                    </div>
+                }
+            </div>
+
+            <!-- Закрытие инцидента / Итоговый Postmortem -->
+            @if (inc.IsActive)
+            {
+                <div class="mc-card">
+                    <h2 style="margin:0 0 0.35rem;font-size:1.02rem;font-weight:800;">🏁 Закрытие инцидента и формирование акта Postmortem</h2>
+                    @if (User.CanResolveIncidents())
+                    {
+                        <form method="post" action="/Incidents/Resolve">
+                            <input type="hidden" name="IncidentId" value="@inc.Id" />
+                            <div style="margin-bottom:0.65rem;">
+                                <label class="mc-label">Установленная первопричина аварии (Root Cause Analysis)</label>
+                                <textarea name="RootCauseAnalysis" class="mc-textarea" rows="2" required
+                                          placeholder="Напр.: Аварийная остановка циркуляционного насоса контура №1 при морозе -36°C / зависание трансивера RS-485..."></textarea>
+                            </div>
+                            <div style="margin-bottom:0.75rem;">
+                                <label class="mc-label">Выполненные корректирующие и превентивные меры</label>
+                                <textarea name="ResolutionSummary" class="mc-textarea" rows="2" required
+                                          placeholder="Напр.: Запущен резервный теплогенератор ТГ-2, восстановлена циркуляция, температура возвращена в коридор +22.5°C..."></textarea>
+                            </div>
+                            <button type="submit" class="mc-btn mc-btn-primary">
+                                ✅ Подтвердить нормализацию и закрыть инцидент
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <div style="font-size:0.83rem;color:var(--text-secondary);">
+                            Текущая роль (<strong>@User.GetRoleTitle()</strong>) может вести оперативный журнал и принимать тревогу.
+                            Официальное закрытие инцидента доступно ролям <strong>Главный агроном</strong> или <strong>Инженер КИПиА</strong> (переключите в 1 клик в шапке).
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="mc-card" style="border-color:var(--accent-emerald);">
+                    <h2 style="margin:0 0 0.45rem;font-size:1.02rem;font-weight:800;color:var(--accent-emerald);">
+                        ✅ Итоговое заключение комиссии ИрГАУ (Postmortem)
+                    </h2>
+                    <div style="font-size:0.86rem;margin-bottom:0.35rem;">
+                        <strong>Закрыл:</strong> @inc.ResolvedBy (@inc.ResolvedAtUtc?.AddHours(8).ToString("dd.MM.yyyy HH:mm:ss") ИРК)
+                    </div>
+                    <div style="font-size:0.86rem;margin-bottom:0.35rem;">
+                        <strong>Первопричина (Root Cause):</strong> @inc.RootCauseAnalysis
+                    </div>
+                    <div style="font-size:0.86rem;margin-bottom:0.75rem;">
+                        <strong>Принятые меры:</strong> @inc.ResolutionSummary
+                    </div>
+                    <a href="/Incidents/PostmortemPdf/@inc.Id" class="mc-btn mc-btn-primary">
+                        📥 Скачать подписанный акт расследования (PDF)
+                    </a>
+                </div>
+            }
+        </div>
+
+        <!-- Правая колонка: Живая лента (Timeline) и чат дежурной смены на SignalR -->
+        <div>
+            <div class="mc-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+                    <div>
+                        <h2 style="margin:0;font-size:1.02rem;font-weight:800;">💬 Живая лента смены (War Room Timeline)</h2>
+                        <div style="font-size:0.77rem;color:var(--text-secondary);">
+                            Мгновенная синхронизация комментариев инженеров, чек-листа и автоматики по SignalR
+                        </div>
+                    </div>
+                    <span class="mc-badge mc-badge-optimal">Live Stream</span>
+                </div>
+
+                <!-- Форма оперативного комментария инженера без перезагрузки -->
+                <form id="wr-comment-form"
+                      hx-post="/Incidents/Comment"
+                      hx-swap="none"
+                      hx-on::after-request="if(event.detail.successful) this.reset();"
+                      method="post"
+                      action="/Incidents/Comment"
+                      style="margin-bottom:0.95rem;">
+                    <input type="hidden" name="IncidentId" value="@inc.Id" />
+                    <div style="display:flex;gap:0.5rem;">
+                        <input type="text"
+                               name="Comment"
+                               class="mc-input"
+                               required
+                               maxlength="600"
+                               placeholder="Запись в журнал смены (напр.: Проверил коллектор, запускаю ТГ-2)..." />
+                        <button type="submit" class="mc-btn mc-btn-primary" style="white-space:nowrap;">Отправить</button>
+                    </div>
+                </form>
+
+                <div class="timeline-list" id="wr-timeline-list">
+                    @foreach (var ev in inc.TimelineEvents.OrderByDescending(e => e.OccurredAtUtc))
+                    {
+                        <div class="timeline-item ev-@ev.EventType">
+                            <div style="display:flex;justify-content:space-between;gap:0.5rem;font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.2rem;">
+                                <span><strong style="color:var(--text-primary);">@ev.AuthorName</strong> • @ev.AuthorRole</span>
+                                <span class="tabular">@ev.OccurredAtUtc.AddHours(8).ToString("dd.MM HH:mm:ss")</span>
+                            </div>
+                            <div style="font-size:0.85rem;">@ev.Message</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const root = document.getElementById("warroom-root");
+            if (!root) return;
+            const incidentId = parseInt(root.dataset.incidentId, 10);
+            const zoneId = parseInt(root.dataset.zoneId, 10);
+
+            // 1. Обратный отсчет запаса времени до риска порчи продукции
+            let remainingSeconds = 0;
+            const timerEl = document.getElementById("wr-survival-timer");
+            if (timerEl && timerEl.dataset.minutes) {
+                remainingSeconds = parseInt(timerEl.dataset.minutes, 10) * 60;
+                setInterval(() => {
+                    const el = document.getElementById("wr-survival-timer");
+                    if (!el) return;
+                    if (remainingSeconds > 0) remainingSeconds--;
+                    const m = Math.floor(remainingSeconds / 60);
+                    const s = remainingSeconds % 60;
+                    el.textContent = `${m}:${s.toString().padStart(2, "0")} мин`;
+                }, 1000);
+            }
+
+            // 2. Живой график зоны внутри War Room
+            let wrChart = null;
+            const ctx = document.getElementById("wr-live-chart");
+            if (ctx && typeof Chart !== "undefined") {
+                fetch(`/Analytics/TimeSeriesData?zoneId=${zoneId}&hours=1`)
+                    .then(r => r.json())
+                    .then(data => {
+                        wrChart = new Chart(ctx, {
+                            type: "line",
+                            data: {
+                                labels: data.labels.slice(-30),
+                                datasets: [
+                                    {
+                                        label: "Температура (°C)",
+                                        data: data.temps.slice(-30),
+                                        borderColor: "#ef4444",
+                                        backgroundColor: "rgba(239,68,68,0.12)",
+                                        fill: true,
+                                        tension: 0.3,
+                                        borderWidth: 2
+                                    },
+                                    {
+                                        label: "Точка росы Tdp (°C)",
+                                        data: data.dewPoints.slice(-30),
+                                        borderColor: "#06b6d4",
+                                        borderDash: [5, 4],
+                                        tension: 0.3,
+                                        borderWidth: 1.8
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                animation: false,
+                                plugins: { legend: { labels: { color: "#94a3b8", boxWidth: 14 } } },
+                                scales: {
+                                    x: { ticks: { color: "#64748b", maxTicksLimit: 8 }, grid: { color: "rgba(148,163,184,0.08)" } },
+                                    y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.12)" } }
+                                }
+                            }
+                        });
+                    });
+            }
+
+            // 3. Подписка на живую телеметрию этой зоны
+            window.addEventListener("agro:telemetry", function (e) {
+                const t = e.detail;
+                if (!t || t.zoneId !== zoneId) return;
+
+                const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+                setTxt("wr-live-temp", t.temperatureC.toFixed(1));
+                setTxt("wr-live-hum", t.humidityPercent.toFixed(1));
+                setTxt("wr-live-co2", Math.round(t.co2Ppm).toString());
+                setTxt("wr-live-dp", t.dewPointC.toFixed(1));
+                setTxt("wr-live-vpd", t.vpdKpa.toFixed(2));
+
+                const st = document.getElementById("wr-sensor-state");
+                if (st) {
+                    st.className = t.isSensorOnline ? "mc-badge mc-badge-optimal" : "mc-badge mc-badge-critical";
+                    st.textContent = t.isSensorOnline ? "ДАТЧИК НА СВЯЗИ" : "ПОТЕРЯ СИГНАЛА";
+                }
+
+                if (wrChart && t.isSensorOnline) {
+                    const nowLabel = new Date(t.recordedAtUtc).toLocaleTimeString("ru-RU");
+                    wrChart.data.labels.push(nowLabel);
+                    wrChart.data.datasets[0].data.push(t.temperatureC);
+                    wrChart.data.datasets[1].data.push(t.dewPointC);
+                    if (wrChart.data.labels.length > 35) {
+                        wrChart.data.labels.shift();
+                        wrChart.data.datasets[0].data.shift();
+                        wrChart.data.datasets[1].data.shift();
+                    }
+                    wrChart.update("none");
+                }
+            });
+
+            // 4. Подписка на живые события этой комнаты War Room (чат, чек-лист, эскалации)
+            window.addEventListener("agro:incident", function (e) {
+                const ev = e.detail;
+                if (!ev || ev.incidentId !== incidentId) return;
+
+                if (typeof ev.estimatedMinutesToDamage === "number") {
+                    remainingSeconds = ev.estimatedMinutesToDamage * 60;
+                }
+
+                const pctEl = document.getElementById("wr-checklist-pct");
+                if (pctEl) pctEl.textContent = `Выполнено: ${ev.checklistCompletionPercent}%`;
+                const barEl = document.getElementById("wr-checklist-bar");
+                if (barEl) barEl.style.width = `${ev.checklistCompletionPercent}%`;
+
+                const list = document.getElementById("wr-timeline-list");
+                if (list) {
+                    const item = document.createElement("div");
+                    item.className = `timeline-item ev-${ev.eventType} flash-update`;
+
+                    const top = document.createElement("div");
+                    top.style.cssText = "display:flex;justify-content:space-between;gap:0.5rem;font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.2rem;";
+
+                    const authorSpan = document.createElement("span");
+                    const strong = document.createElement("strong");
+                    strong.style.color = "var(--text-primary)";
+                    strong.textContent = ev.authorName;
+                    authorSpan.appendChild(strong);
+                    authorSpan.appendChild(document.createTextNode(" • " + ev.authorRole));
+
+                    const timeSpan = document.createElement("span");
+                    timeSpan.className = "tabular";
+                    timeSpan.textContent = new Date(ev.occurredAtUtc).toLocaleTimeString("ru-RU");
+
+                    top.appendChild(authorSpan);
+                    top.appendChild(timeSpan);
+
+                    const body = document.createElement("div");
+                    body.style.fontSize = "0.85rem";
+                    body.textContent = ev.message;
+
+                    item.appendChild(top);
+                    item.appendChild(body);
+                    list.prepend(item);
+                }
+            });
+        })();
+    </script>
+}

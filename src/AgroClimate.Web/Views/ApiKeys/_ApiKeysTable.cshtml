@@ -1,0 +1,59 @@
+@model IReadOnlyList<ApiKeyCredential>
+
+<div style="overflow-x:auto;">
+    <table class="mc-table tabular">
+        <thead>
+            <tr>
+                <th>Контроллер / Стенд</th>
+                <th>Климатическая зона</th>
+                <th>API-ключ (заголовок <code>X-Api-Key</code>)</th>
+                <th>Принято пакетов</th>
+                <th>Последний пакет</th>
+                <th>Статус</th>
+                <th style="text-align:right;">Управление</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var k in Model)
+            {
+                <tr>
+                    <td>
+                        <div style="font-weight:700;">@k.DeviceLabel</div>
+                        <div style="font-size:0.74rem;color:var(--text-secondary);">Выдал: @k.CreatedBy</div>
+                    </td>
+                    <td>@k.Zone?.Name</td>
+                    <td>
+                        <code style="background:var(--bg-surface-muted);padding:0.2rem 0.45rem;border-radius:6px;font-size:0.8rem;">@k.ApiKey</code>
+                    </td>
+                    <td style="font-weight:700;">@k.TotalPacketsReceived.ToString("N0")</td>
+                    <td style="font-size:0.79rem;">
+                        @(k.LastUsedAtUtc.HasValue ? k.LastUsedAtUtc.Value.AddHours(8).ToString("dd.MM HH:mm:ss") + " ИРК" : "Ожидает подключения")
+                    </td>
+                    <td>
+                        @if (k.IsActive)
+                        {
+                            <span class="mc-badge mc-badge-optimal">АКТИВЕН</span>
+                        }
+                        else
+                        {
+                            <span class="mc-badge mc-badge-critical">ОТОЗВАН</span>
+                        }
+                    </td>
+                    <td style="text-align:right;white-space:nowrap;">
+                        <a href="/ApiKeys?keyId=@k.Id" class="mc-btn mc-btn-sm">📋 Скетч</a>
+                        @if (User.CanManageApiKeys())
+                        {
+                            <button type="button"
+                                    class="mc-btn mc-btn-sm @(k.IsActive ? "mc-btn-danger" : "mc-btn-primary")"
+                                    hx-post="/ApiKeys/Toggle/@k.Id"
+                                    hx-target="#apikeys-table-host"
+                                    hx-swap="innerHTML">
+                                @(k.IsActive ? "Отозвать" : "Включить")
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

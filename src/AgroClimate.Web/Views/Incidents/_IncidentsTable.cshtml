@@ -1,0 +1,88 @@
+@model IncidentsIndexViewModel
+
+<div class="mc-card" style="padding:0;overflow:hidden;">
+    @if (Model.Incidents.Count == 0)
+    {
+        <div style="padding:2rem;text-align:center;color:var(--text-secondary);">
+            По выбранным фильтрам инцидентов не найдено. Запустите аварийный сценарий в IoT-симуляторе на главной панели для живой демонстрации!
+        </div>
+    }
+    else
+    {
+        <div style="overflow-x:auto;">
+            <table class="mc-table tabular">
+                <thead>
+                    <tr>
+                        <th>Номер</th>
+                        <th>Объект ИрГАУ</th>
+                        <th>Уровень / Триггер</th>
+                        <th>Описание тревоги</th>
+                        <th>Статус / Регламент</th>
+                        <th>Открыт (ИРК)</th>
+                        <th>MTTA / MTTR</th>
+                        <th style="text-align:right;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var inc in Model.Incidents)
+                    {
+                        string sevBadge = inc.Severity >= IncidentSeverity.Critical
+                            ? "mc-badge mc-badge-critical"
+                            : "mc-badge mc-badge-warning";
+
+                        string stBadge = inc.Status == IncidentStatus.Resolved
+                            ? "mc-badge mc-badge-optimal"
+                            : inc.Status == IncidentStatus.Open
+                                ? "mc-badge mc-badge-critical"
+                                : "mc-badge mc-badge-warning";
+
+                        string stLabel = inc.Status switch
+                        {
+                            IncidentStatus.Resolved => "Закрыт",
+                            IncidentStatus.Mitigating => "Устранение",
+                            IncidentStatus.Acknowledged => "В работе",
+                            _ => "Ожидает смены!"
+                        };
+
+                        <tr>
+                            <td style="font-weight:800;">@inc.IncidentNumber</td>
+                            <td>
+                                <div style="font-weight:700;">@inc.Zone?.Name</div>
+                                <div style="font-size:0.74rem;color:var(--text-secondary);">@inc.Zone?.AgroProfile?.CropName</div>
+                            </td>
+                            <td>
+                                <span class="@sevBadge">@inc.Severity</span>
+                                <div style="font-size:0.73rem;color:var(--text-muted);margin-top:0.2rem;">@inc.TriggerType</div>
+                            </td>
+                            <td style="max-width:340px;">
+                                <div style="font-weight:600;">@inc.Title</div>
+                                <div style="font-size:0.76rem;color:var(--text-secondary);">@inc.AlertSummary</div>
+                            </td>
+                            <td>
+                                <span class="@stBadge">@stLabel</span>
+                                <div style="font-size:0.74rem;color:var(--text-secondary);margin-top:0.2rem;">
+                                    Чек-лист: <strong>@inc.ChecklistCompletionPercent%</strong>
+                                </div>
+                            </td>
+                            <td style="font-size:0.8rem;">
+                                @inc.OpenedAtUtc.AddHours(8).ToString("dd.MM.yyyy HH:mm")
+                            </td>
+                            <td style="font-size:0.79rem;">
+                                <div>MTTA: <strong>@(inc.MttaMinutes.HasValue ? $"{inc.MttaMinutes:F1} мин" : "—")</strong></div>
+                                <div>MTTR: <strong>@(inc.MttrMinutes.HasValue ? $"{inc.MttrMinutes:F1} мин" : "в работе")</strong></div>
+                            </td>
+                            <td style="text-align:right;white-space:nowrap;">
+                                <a href="/Incidents/WarRoom/@inc.Id" class="mc-btn @(inc.IsActive ? "mc-btn-danger" : "") mc-btn-sm">
+                                    @(inc.IsActive ? "🚨 War Room" : "Открыть разбор")
+                                </a>
+                                <a href="/Incidents/PostmortemPdf/@inc.Id" class="mc-btn mc-btn-sm" title="Скачать официальный PDF-акт расследования (QuestPDF)">
+                                    📄 PDF
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

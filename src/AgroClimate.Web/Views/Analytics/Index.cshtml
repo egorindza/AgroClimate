@@ -1,0 +1,317 @@
+@model AnalyticsViewModel
+@{
+    ViewData["Title"] = "Аналитика стабильности и SLA";
+}
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+    <div>
+        <h1 style="margin:0;font-size:1.28rem;font-weight:800;">📈 Аналитика стабильности микроклимата, SLA и T-SQL Window Radar</h1>
+        <div style="font-size:0.82rem;color:var(--text-secondary);">
+            Мгновенные выборки по временным рядам MS SQL Server: <code>NONCLUSTERED COLUMNSTORE INDEX</code> + оконные функции <code>AVG, STDEV, FIRST_VALUE, LAG</code>
+        </div>
+    </div>
+    <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">
+        <span class="mc-badge @(Model.HasColumnstoreIndex ? "mc-badge-optimal" : "mc-badge-critical")">
+            Columnstore Index: @(Model.HasColumnstoreIndex ? "ACTIVE" : "OFF")
+        </span>
+        <span class="mc-badge @(Model.HasTemporalTable ? "mc-badge-optimal" : "mc-badge-critical")">
+            Temporal Tables: @(Model.HasTemporalTable ? "ACTIVE" : "OFF")
+        </span>
+        <span class="mc-badge mc-badge-info tabular">
+            Dapper Scan: @Model.LastAnalyticalQueryMs.ToString("F2") мс (@Model.TotalColumnstoreRows.ToString("N0") строк)
+        </span>
+    </div>
+</div>
+
+<!-- Интерактивный эксплорер временных рядов Chart.js -->
+<div class="mc-card" style="margin-bottom:1.15rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;flex-wrap:wrap;margin-bottom:0.9rem;">
+        <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;">
+            <label style="font-weight:700;font-size:0.85rem;">Объект ИрГАУ:</label>
+            <select id="an-zone-select" class="mc-select" style="width:auto;min-width:300px;" onchange="reloadAnalyticsCharts()">
+                @foreach (var z in Model.Zones)
+                {
+                    if (z.Id == Model.SelectedZone.Id)
+                    {
+                        <option value="@z.Id" selected>@z.Name (@z.AgroProfile?.CropName)</option>
+                    }
+                    else
+                    {
+                        <option value="@z.Id">@z.Name (@z.AgroProfile?.CropName)</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div style="display:flex;gap:0.4rem;" id="an-hours-group">
+            <button type="button" class="mc-btn mc-btn-sm @(Model.SelectedHours == 1 ? "mc-btn-primary" : "")" onclick="setHoursWindow(1, this)">1 час (Live)</button>
+            <button type="button" class="mc-btn mc-btn-sm @(Model.SelectedHours == 6 ? "mc-btn-primary" : "")" onclick="setHoursWindow(6, this)">6 часов</button>
+            <button type="button" class="mc-btn mc-btn-sm @(Model.SelectedHours == 24 ? "mc-btn-primary" : "")" onclick="setHoursWindow(24, this)">24 часа</button>
+            <button type="button" class="mc-btn mc-btn-sm @(Model.SelectedHours == 48 ? "mc-btn-primary" : "")" onclick="setHoursWindow(48, this)">48 часов</button>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div style="background:var(--bg-surface-muted);border:1px solid var(--border-subtle);border-radius:10px;padding:0.85rem;">
+            <div style="font-weight:700;font-size:0.84rem;margin-bottom:0.4rem;">
+                Температура воздуха, целевой коридор и Точка росы $T_{dp}$ (°C)
+            </div>
+            <div style="height:265px;">
+                <canvas id="an-temp-chart"></canvas>
+            </div>
+        </div>
+        <div style="background:var(--bg-surface-muted);border:1px solid var(--border-subtle);border-radius:10px;padding:0.85rem;">
+            <div style="font-weight:700;font-size:0.84rem;margin-bottom:0.4rem;">
+                Относительная влажность RH (%), дефицит пара VPD (кПа) и CO₂ (ppm)
+            </div>
+            <div style="height:265px;">
+                <canvas id="an-vpd-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Радар оконных функций T-SQL -->
+<div class="mc-card" style="margin-bottom:1.15rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+        <div>
+            <h2 style="margin:0;font-size:1.04rem;font-weight:800;">
+                ⚡ Радар раннего выявления опасных трендов (T-SQL Window Functions в Dapper)
+            </h2>
+            <div style="font-size:0.79rem;color:var(--text-secondary);">
+                Скользящее окно <code>OVER (PARTITION BY ZoneId ORDER BY RecordedAtUtc ROWS BETWEEN 19 PRECEDING AND CURRENT ROW)</code> вычисляет скорость охлаждения/разогрева еще до пересечения критического нуля
+            </div>
+        </div>
+        <button type="button" class="mc-btn mc-btn-sm mc-btn-primary"
+                hx-get="/Analytics/WindowRadarPartial"
+                hx-target="#window-radar-host"
+                hx-swap="innerHTML">
+            🔄 Пересчитать окно T-SQL
+        </button>
+    </div>
+
+    <div id="window-radar-host">
+        @await Html.PartialAsync("_WindowRadarTable", Model.WindowRadar)
+    </div>
+</div>
+
+<!-- Рейтинг соблюдения климатического SLA за 48 часов (Columnstore) -->
+<div class="mc-card">
+    <h2 style="margin:0 0 0.3rem;font-size:1.04rem;font-weight:800;">
+        🏆 Соблюдение климатического SLA за 48 часов (<code>NONCLUSTERED COLUMNSTORE INDEX</code>)
+    </h2>
+    <div style="font-size:0.79rem;color:var(--text-secondary);margin-bottom:0.8rem;">
+        Доля времени нахождения каждой зоны ИрГАУ в зеленом агрономическом коридоре, взвешенная через интервалы <code>LAG(RecordedAtUtc)</code>
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table class="mc-table tabular">
+            <thead>
+                <tr>
+                    <th>Климатическая зона</th>
+                    <th>Культура</th>
+                    <th>Выборок (48ч)</th>
+                    <th>SLA (% в зеленой зоне)</th>
+                    <th>Средняя T° (±σ)</th>
+                    <th>Мин / Макс T°</th>
+                    <th>Средн. RH%</th>
+                    <th>Средн. VPD</th>
+                    <th>Средн. CO₂</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Model.SlaSummaries)
+                {
+                    string slaBadge = s.SlaCompliancePercent >= 96.0
+                        ? "mc-badge mc-badge-optimal"
+                        : s.SlaCompliancePercent >= 88.0
+                            ? "mc-badge mc-badge-warning"
+                            : "mc-badge mc-badge-critical";
+
+                    <tr>
+                        <td style="font-weight:700;">@s.ZoneName</td>
+                        <td style="color:var(--text-secondary);">@s.CropName</td>
+                        <td>@s.TotalSamples.ToString("N0")</td>
+                        <td><span class="@slaBadge">@s.SlaCompliancePercent.ToString("F2") %</span></td>
+                        <td>@s.AvgTempC.ToString("F2") °C <span style="color:var(--text-muted);">(±@s.TempStdDev.ToString("F2"))</span></td>
+                        <td>@s.MinTempC.ToString("F1") .. @s.MaxTempC.ToString("F1") °C</td>
+                        <td>@s.AvgHumidityPercent.ToString("F1") %</td>
+                        <td>@s.AvgVpdKpa.ToString("F2") кПа</td>
+                        <td>@s.AvgCo2Ppm.ToString("F0") ppm</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let currentHours = @Model.SelectedHours;
+        let tempChart = null;
+        let vpdChart = null;
+
+        function setHoursWindow(h, btn) {
+            currentHours = h;
+            document.querySelectorAll("#an-hours-group .mc-btn").forEach(b => b.classList.remove("mc-btn-primary"));
+            btn.classList.add("mc-btn-primary");
+            reloadAnalyticsCharts();
+        }
+
+        function reloadAnalyticsCharts() {
+            const zoneId = parseInt(document.getElementById("an-zone-select").value, 10);
+            fetch(`/Analytics/TimeSeriesData?zoneId=${zoneId}&hours=${currentHours}`)
+                .then(r => r.json())
+                .then(d => renderCharts(d));
+        }
+
+        function renderCharts(d) {
+            const tCtx = document.getElementById("an-temp-chart");
+            const vCtx = document.getElementById("an-vpd-chart");
+            if (!tCtx || !vCtx || typeof Chart === "undefined") return;
+
+            if (tempChart) tempChart.destroy();
+            if (vpdChart) vpdChart.destroy();
+
+            const minLine = d.labels.map(() => d.targetTempMin);
+            const maxLine = d.labels.map(() => d.targetTempMax);
+
+            tempChart = new Chart(tCtx, {
+                type: "line",
+                data: {
+                    labels: d.labels,
+                    datasets: [
+                        {
+                            label: "Температура (°C)",
+                            data: d.temps,
+                            borderColor: "#10b981",
+                            backgroundColor: "rgba(16,185,129,0.12)",
+                            fill: false,
+                            tension: 0.25,
+                            borderWidth: 2.2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: "Точка росы Tdp (°C)",
+                            data: d.dewPoints,
+                            borderColor: "#06b6d4",
+                            borderDash: [5, 4],
+                            tension: 0.25,
+                            borderWidth: 1.7,
+                            pointRadius: 0
+                        },
+                        {
+                            label: "Норма макс (°C)",
+                            data: maxLine,
+                            borderColor: "rgba(245,158,11,0.55)",
+                            borderDash: [3, 3],
+                            borderWidth: 1.2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: "Норма мин (°C)",
+                            data: minLine,
+                            borderColor: "rgba(245,158,11,0.55)",
+                            borderDash: [3, 3],
+                            borderWidth: 1.2,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: { mode: "index", intersect: false },
+                    plugins: { legend: { labels: { color: "#94a3b8", boxWidth: 12 } } },
+                    scales: {
+                        x: { ticks: { color: "#64748b", maxTicksLimit: 9 }, grid: { color: "rgba(148,163,184,0.08)" } },
+                        y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.12)" } }
+                    }
+                }
+            });
+
+            vpdChart = new Chart(vCtx, {
+                type: "line",
+                data: {
+                    labels: d.labels,
+                    datasets: [
+                        {
+                            label: "Влажность RH (%)",
+                            data: d.humidities,
+                            borderColor: "#38bdf8",
+                            yAxisID: "y",
+                            tension: 0.25,
+                            borderWidth: 2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: "VPD (кПа)",
+                            data: d.vpds,
+                            borderColor: "#f59e0b",
+                            yAxisID: "y1",
+                            tension: 0.25,
+                            borderWidth: 2,
+                            pointRadius: 0
+                        },
+                        {
+                            label: "CO₂ (×10 ppm)",
+                            data: d.co2s.map(c => +(c / 10.0).toFixed(1)),
+                            borderColor: "#a855f7",
+                            yAxisID: "y",
+                            borderDash: [4, 3],
+                            tension: 0.25,
+                            borderWidth: 1.6,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: { mode: "index", intersect: false },
+                    plugins: { legend: { labels: { color: "#94a3b8", boxWidth: 12 } } },
+                    scales: {
+                        x: { ticks: { color: "#64748b", maxTicksLimit: 9 }, grid: { color: "rgba(148,163,184,0.08)" } },
+                        y: { position: "left", ticks: { color: "#38bdf8" }, grid: { color: "rgba(148,163,184,0.12)" } },
+                        y1: { position: "right", ticks: { color: "#f59e0b" }, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            reloadAnalyticsCharts();
+
+            // Живое достраивание графика в режиме 1 час по SignalR
+            window.addEventListener("agro:telemetry", function (e) {
+                const t = e.detail;
+                const selZone = parseInt(document.getElementById("an-zone-select").value, 10);
+                if (!t || t.zoneId !== selZone || currentHours !== 1 || !tempChart || !vpdChart || !t.isSensorOnline) return;
+
+                const lbl = new Date(t.recordedAtUtc).toLocaleTimeString("ru-RU");
+                tempChart.data.labels.push(lbl);
+                tempChart.data.datasets[0].data.push(t.temperatureC);
+                tempChart.data.datasets[1].data.push(t.dewPointC);
+                tempChart.data.datasets[2].data.push(tempChart.data.datasets[2].data[0]);
+                tempChart.data.datasets[3].data.push(tempChart.data.datasets[3].data[0]);
+
+                vpdChart.data.labels.push(lbl);
+                vpdChart.data.datasets[0].data.push(t.humidityPercent);
+                vpdChart.data.datasets[1].data.push(t.vpdKpa);
+                vpdChart.data.datasets[2].data.push(+(t.co2Ppm / 10.0).toFixed(1));
+
+                if (tempChart.data.labels.length > 90) {
+                    tempChart.data.labels.shift();
+                    tempChart.data.datasets.forEach(ds => ds.data.shift());
+                    vpdChart.data.labels.shift();
+                    vpdChart.data.datasets.forEach(ds => ds.data.shift());
+                }
+
+                tempChart.update("none");
+                vpdChart.update("none");
+            });
+        });
+    </script>
+}

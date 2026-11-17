@@ -1,0 +1,199 @@
+@model ApiKeysViewModel
+@{
+    ViewData["Title"] = "Интеграция датчиков ESP32 / REST API";
+    string sampleKey = Model.SelectedSampleKey?.ApiKey ?? "IRGAU-ESP32-GH1-DEMO-2026";
+    string sampleSensor = Model.SelectedSampleKey?.Zone?.ControllerNodeId ?? "ESP32-GH1-01";
+    string sampleZoneName = Model.SelectedSampleKey?.Zone?.Name ?? "Теплица №1 — Рассада томата";
+}
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+    <div>
+        <h1 style="margin:0;font-size:1.28rem;font-weight:800;">🔌 Аппаратный шлюз телеметрии ESP32 / Arduino (REST API)</h1>
+        <div style="font-size:0.82rem;color:var(--text-secondary);">
+            Прием JSON-пакетов от лабораторных и промышленных микроконтроллеров по <code>X-Api-Key</code> прямо в буфер <code>System.Threading.Channels</code>
+        </div>
+    </div>
+    <a href="/api/v1/telemetry/pipeline" target="_blank" class="mc-btn mc-btn-sm">🔍 JSON диагностика конвейера</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(Model.CreatedMessage))
+{
+    <div class="mc-card" style="margin-bottom:1rem;border-color:var(--accent-emerald);padding:0.8rem 1rem;color:var(--accent-emerald);font-weight:600;">
+        ✅ @Model.CreatedMessage
+    </div>
+}
+@if (Model.ValidationErrors.Count > 0)
+{
+    <div class="mc-card mc-card-critical" style="margin-bottom:1rem;padding:0.8rem 1rem;color:var(--accent-red);font-weight:600;">
+        ⚠️ @string.Join(" ", Model.ValidationErrors)
+    </div>
+}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;margin-bottom:1.15rem;">
+    <!-- Выпуск нового ключа -->
+    <div class="mc-card">
+        <h2 style="margin:0 0 0.55rem;font-size:1.02rem;font-weight:800;">🔑 Выпуск API-ключа для студенческого / полевого узла</h2>
+        <form method="post" action="/ApiKeys/Create">
+            <div style="margin-bottom:0.65rem;">
+                <label class="mc-label">Маркировка микроконтроллера / лабораторного стенда</label>
+                <input type="text" name="DeviceLabel" class="mc-input" required
+                       placeholder="Напр.: ESP32-C6 Стенд кафедры автоматизации №4" />
+            </div>
+            <div style="margin-bottom:0.8rem;">
+                <label class="mc-label">Привязка к объекту ИрГАУ</label>
+                <select name="ZoneId" class="mc-select">
+                    @foreach (var z in Model.Zones)
+                    {
+                        <option value="@z.Id">@z.Name (@z.Code)</option>
+                    }
+                </select>
+            </div>
+            <button type="submit" class="mc-btn mc-btn-primary" @(User.CanManageApiKeys() ? "" : "disabled")>
+                ➕ Сгенерировать ключ доступа
+            </button>
+        </form>
+    </div>
+
+    <!-- Живой тестер REST API прямо из интерфейса -->
+    <div class="mc-card" style="border-color:rgba(6, 182, 212, 0.35);">
+        <h2 style="margin:0 0 0.45rem;font-size:1.02rem;font-weight:800;">🚀 Тестовая отправка JSON-телеметрии в <code>POST /api/v1/telemetry/ingest</code></h2>
+        <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.65rem;">
+            Выбранный ключ: <code>@sampleKey</code> (@sampleZoneName)
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.55rem;margin-bottom:0.7rem;">
+            <div>
+                <label class="mc-label">Температура (°C)</label>
+                <input type="number" step="0.1" id="test-temp" class="mc-input tabular" value="23.4" />
+            </div>
+            <div>
+                <label class="mc-label">Влажность (%)</label>
+                <input type="number" step="0.5" id="test-hum" class="mc-input tabular" value="66.5" />
+            </div>
+            <div>
+                <label class="mc-label">CO₂ (ppm)</label>
+                <input type="number" step="10" id="test-co2" class="mc-input tabular" value="760" />
+            </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:0.6rem;">
+            <button type="button" onclick="sendTestEspPacket()" class="mc-btn mc-btn-primary">
+                📡 Отправить реальный HTTP POST пакет
+            </button>
+            <span id="test-api-status" style="font-size:0.8rem;color:var(--text-secondary);"></span>
+        </div>
+
+        <pre id="test-api-output" class="code-block" style="margin-top:0.65rem;max-height:135px;display:none;"></pre>
+    </div>
+</div>
+
+<!-- Журнал выпущенных ключей -->
+<div class="mc-card" style="margin-bottom:1.15rem;">
+    <h2 style="margin:0 0 0.7rem;font-size:1.02rem;font-weight:800;">📋 Журнал активных и отозванных API-ключей</h2>
+    <div id="apikeys-table-host">
+        @await Html.PartialAsync("_ApiKeysTable", Model.ApiKeys)
+    </div>
+</div>
+
+<!-- Готовый curl и прошивка C++ для ESP32 / Arduino -->
+<div style="display:grid;grid-template-columns:1fr 1.2fr;gap:1.1rem;">
+    <div class="mc-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.55rem;">
+            <h2 style="margin:0;font-size:0.98rem;font-weight:800;">💻 Пример отправки через <code>curl</code></h2>
+            <button type="button" class="mc-btn mc-btn-sm" onclick="copyCodeBlock('curl-snippet')">Скопировать</button>
+        </div>
+        <pre id="curl-snippet" class="code-block">curl -X POST "@Model.BaseServerUrl/api/v1/telemetry/ingest" \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: @sampleKey" \
+  -d '{
+    "sensorCode": "@sampleSensor",
+    "temperatureC": 22.8,
+    "humidityPercent": 67.5,
+    "co2Ppm": 740
+  }'</pre>
+    </div>
+
+    <div class="mc-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.55rem;">
+            <h2 style="margin:0;font-size:0.98rem;font-weight:800;">🔧 Готовый C++ скетч для ESP32 (Arduino IDE / PlatformIO)</h2>
+            <button type="button" class="mc-btn mc-btn-sm" onclick="copyCodeBlock('esp32-sketch')">Скопировать скетч</button>
+        </div>
+        <pre id="esp32-sketch" class="code-block">#include &lt;WiFi.h&gt;
+#include &lt;HTTPClient.h&gt;
+#include &lt;DHT.h&gt;
+
+const char* WIFI_SSID = "IrGAU_AgroLab_IoT";
+const char* WIFI_PASS = "SiberiaAgro2026";
+const char* SERVER_URL = "@Model.BaseServerUrl/api/v1/telemetry/ingest";
+const char* API_KEY    = "@sampleKey";
+
+DHT dht(4, DHT22);
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+}
+
+void loop() {
+  float temp = dht.readTemperature();
+  float hum  = dht.readHumidity();
+  int co2Ppm = 720; // SCD41 I2C NDIR датчик CO2
+
+  if (!isnan(temp) &amp;&amp; !isnan(hum) &amp;&amp; WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(SERVER_URL);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Api-Key", API_KEY);
+
+    String payload = String("{\"sensorCode\":\"@sampleSensor\",\"temperatureC\":")
+                     + String(temp, 2) + ",\"humidityPercent\":" + String(hum, 1)
+                     + ",\"co2Ppm\":" + String(co2Ppm) + "}";
+
+    int statusCode = http.POST(payload);
+    Serial.printf("[AgroClimate] HTTP %d -> %s\n", statusCode, http.getString().c_str());
+    http.end();
+  }
+  delay(5000);
+}</pre>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        async function sendTestEspPacket() {
+            const statusEl = document.getElementById("test-api-status");
+            const outEl = document.getElementById("test-api-output");
+            statusEl.textContent = "Отправка пакета...";
+
+            const body = {
+                sensorCode: "@sampleSensor",
+                temperatureC: parseFloat(document.getElementById("test-temp").value),
+                humidityPercent: parseFloat(document.getElementById("test-hum").value),
+                co2Ppm: parseFloat(document.getElementById("test-co2").value)
+            };
+
+            const resp = await fetch("/api/v1/telemetry/ingest", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Api-Key": "@sampleKey"
+                },
+                body: JSON.stringify(body)
+            });
+
+            const json = await resp.json();
+            statusEl.textContent = `Ответ сервера: HTTP ${resp.status}`;
+            statusEl.style.color = resp.ok ? "var(--accent-emerald)" : "var(--accent-red)";
+            outEl.style.display = "block";
+            outEl.textContent = JSON.stringify(json, null, 2);
+        }
+
+        function copyCodeBlock(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            navigator.clipboard.writeText(el.textContent);
+        }
+    </script>
+}
