@@ -36,6 +36,15 @@ public sealed class AgroClimateDataSeeder
 
         if (await _db.ClimateZones.AnyAsync(ct))
         {
+            var restartNow = DateTime.UtcNow;
+            var existingZones = await _db.ClimateZones.ToListAsync(ct);
+            foreach (var z in existingZones)
+            {
+                z.LastTelemetryUtc = restartNow;
+                z.IsSensorOnline = true;
+            }
+            await _db.SaveChangesAsync(ct);
+
             long existingRows = await _db.TelemetryReadings.LongCountAsync(ct);
             _channel.RecordBatchFlushed(0, 0, existingRows);
             _logger.LogInformation("БД IrGau_AgroClimateDb уже проинициализирована ({Rows} строк телеметрии).", existingRows);
@@ -273,23 +282,23 @@ public sealed class AgroClimateDataSeeder
         {
             CreateInitialZone("GH-TOMATO-01", "Теплица №1 — Рассада томата", "Учхоз «Оёкское» ИрГАУ, зимний блок А",
                 FacilityType.Greenhouse, "Зимняя поликарбонатная теплица с водяным контуром и натриевой/LED досветкой для выращивания рассады томата.",
-                640, "м²", pTomato, "ESP32-GH1-01", 10, 23.1, 67.0, 780, now),
+                640, "м²", pTomato, "ESP32-GH1-01", 14, 23.1, 67.0, 780, now),
 
             CreateInitialZone("CF-MICRO-02", "Сити-ферма микрозелени", "Агробиотехнопарк ИрГАУ (п. Молодёжный)",
                 FacilityType.CityFarm, "Пятиярусная вертикальная гидропонная установка закрытого типа с автоматическим контролем VPD и спектра.",
-                180, "м²", pMicrogreens, "ESP32-CF2-02", 12, 21.0, 61.5, 690, now),
+                180, "м²", pMicrogreens, "ESP32-CF2-02", 14, 21.0, 61.5, 690, now),
 
             CreateInitialZone("STOR-POTATO-03", "Овощехранилище семенного картофеля", "Хранилищный комплекс учхоза ИрГАУ, секция №3",
                 FacilityType.VegetableStorage, "Навальное хранилище элитного семенного картофеля «Сарма» с подпольной активной вентиляцией.",
-                1200, "т", pPotato, "ESP32-POTATO-03", 10, 3.4, 89.2, 560, now),
+                1200, "т", pPotato, "ESP32-POTATO-03", 12, 3.4, 89.2, 560, now),
 
             CreateInitialZone("SILO-WHEAT-02", "Зерносклад учхоза — Силос пшеницы №2", "Элеваторный участок учхоза ИрГАУ",
                 FacilityType.GrainSilo, "Металлический вентилируемый силос с многоуровневыми термоподвесками и датчиками межзернового CO₂ для раннего выявления самосогревания.",
-                850, "т", pWheatSilo, "STM32-SILO2-04", 12, 9.6, 58.0, 465, now),
+                850, "т", pWheatSilo, "STM32-SILO2-04", 14, 9.6, 58.0, 465, now),
 
             CreateInitialZone("LAB-CHAMBER-04", "Климатическая камера биолаборатории КК-4", "Лаборатория клонального микроразмножения ИрГАУ, ауд. 118",
                 FacilityType.BioLabChamber, "Прецизионная фитотронная камера для безвирусного оздоровления меристем картофеля и ягодных культур Сибири.",
-                24, "м³", pBioLab, "ESP32-LAB4-05", 10, 23.2, 68.0, 495, now)
+                24, "м³", pBioLab, "ESP32-LAB4-05", 14, 23.2, 68.0, 495, now)
         };
 
         _db.ClimateZones.AddRange(zones);
@@ -340,6 +349,12 @@ public sealed class AgroClimateDataSeeder
                 LastUsedAtUtc = now.AddHours(-6),
                 TotalPacketsReceived = 312
             });
+
+        var finishedAt = DateTime.UtcNow;
+        foreach (var z in zones)
+        {
+            z.LastTelemetryUtc = finishedAt;
+        }
 
         await _db.SaveChangesAsync(ct);
         _channel.RecordBatchFlushed(0, 0, insertedHistoryRows);

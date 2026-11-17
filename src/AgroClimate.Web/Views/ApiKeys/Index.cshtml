@@ -118,14 +118,16 @@
             <h2 style="margin:0;font-size:0.98rem;font-weight:800;">🔧 Готовый C++ скетч для ESP32 (Arduino IDE / PlatformIO)</h2>
             <button type="button" class="mc-btn mc-btn-sm" onclick="copyCodeBlock('esp32-sketch')">Скопировать скетч</button>
         </div>
-        <pre id="esp32-sketch" class="code-block">#include &lt;WiFi.h&gt;
-#include &lt;HTTPClient.h&gt;
-#include &lt;DHT.h&gt;
+        @{
+            var esp32Sketch = $$"""
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <DHT.h>
 
-const char* WIFI_SSID = "IrGAU_AgroLab_IoT";
-const char* WIFI_PASS = "SiberiaAgro2026";
-const char* SERVER_URL = "@Model.BaseServerUrl/api/v1/telemetry/ingest";
-const char* API_KEY    = "@sampleKey";
+const char* WIFI_SSID  = "IrGAU_AgroLab_IoT";
+const char* WIFI_PASS  = "SiberiaAgro2026";
+const char* SERVER_URL = "{{Model.BaseServerUrl}}/api/v1/telemetry/ingest";
+const char* API_KEY    = "{{sampleKey}}";
 
 DHT dht(4, DHT22);
 
@@ -141,13 +143,13 @@ void loop() {
   float hum  = dht.readHumidity();
   int co2Ppm = 720; // SCD41 I2C NDIR датчик CO2
 
-  if (!isnan(temp) &amp;&amp; !isnan(hum) &amp;&amp; WiFi.status() == WL_CONNECTED) {
+  if (!isnan(temp) && !isnan(hum) && WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     http.begin(SERVER_URL);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("X-Api-Key", API_KEY);
 
-    String payload = String("{\"sensorCode\":\"@sampleSensor\",\"temperatureC\":")
+    String payload = String("{\"sensorCode\":\"{{sampleSensor}}\",\"temperatureC\":")
                      + String(temp, 2) + ",\"humidityPercent\":" + String(hum, 1)
                      + ",\"co2Ppm\":" + String(co2Ppm) + "}";
 
@@ -156,7 +158,10 @@ void loop() {
     http.end();
   }
   delay(5000);
-}</pre>
+}
+""";
+        }
+        <pre id="esp32-sketch" class="code-block">@esp32Sketch</pre>
     </div>
 </div>
 

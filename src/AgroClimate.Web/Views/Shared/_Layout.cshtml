@@ -1,9 +1,11 @@
-﻿@{
+﻿@inject AgroClimate.Application.Interfaces.ITelemetryChannel TelemetryChannel
+@{
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "Dashboard";
     var roleKey = User.GetRoleKey();
     var fullName = User.GetFullName();
     var roleTitle = User.GetRoleTitle();
     var returnUrl = Context.Request.Path + Context.Request.QueryString;
+    var pipeMetrics = TelemetryChannel.GetMetrics();
 }
 <!DOCTYPE html>
 <html lang="ru" data-theme="dark">
@@ -57,7 +59,7 @@
                     <span id="sr-conn-dot" class="status-dot optimal"></span>
                     <span id="sr-conn-text" style="font-weight:700;">SignalR Live</span>
                     <span style="opacity:0.4;">|</span>
-                    <span>Columnstore: <strong id="pipe-total-rows">—</strong></span>
+                    <span>Columnstore: <strong id="pipe-total-rows">@(pipeMetrics.ColumnstoreTotalRows > 0 ? pipeMetrics.ColumnstoreTotalRows.ToString("N0") : "—")</strong></span>
                     <span style="opacity:0.4;">|</span>
                     <span>Bulk: <strong id="pipe-flush-ms">1.4 мс</strong></span>
                 </div>
