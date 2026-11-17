@@ -189,8 +189,8 @@ public static class AgroPhysicsCalculator
                 $"Повышенная температура: {tempC:F1}°C (порог внимания {profile.WarnTempMax:F1}°C)");
         }
 
-        // 3. Раннее обнаружение опасного температурного тренда (даже внутри зеленого коридора!)
-        if (tempVelocityPerMin <= -profile.MaxAllowedTempDropRatePerMin)
+        // 3. Раннее обнаружение опасного температурного тренда (не срабатывает при штатном возврате из отклонения к норме)
+        if (tempVelocityPerMin <= -profile.MaxAllowedTempDropRatePerMin && tempC <= profile.TargetTempMax)
         {
             var sev = Math.Abs(tempVelocityPerMin) >= profile.MaxAllowedTempDropRatePerMin * 1.8 || tempC < profile.TargetTempMin
                 ? IncidentSeverity.Critical
@@ -198,13 +198,18 @@ public static class AgroPhysicsCalculator
             RegisterIssue(sev, IncidentTriggerType.RapidTrendAnomaly,
                 $"Стремительное падение температуры {tempVelocityPerMin:F2} °C/мин (допустимо не быстрее -{profile.MaxAllowedTempDropRatePerMin:F2} °C/мин)");
         }
-        else if (tempVelocityPerMin >= profile.MaxAllowedTempRiseRatePerMin)
+        else if (tempVelocityPerMin >= profile.MaxAllowedTempRiseRatePerMin && tempC >= profile.TargetTempMin)
         {
-            var sev = tempVelocityPerMin >= profile.MaxAllowedTempRiseRatePerMin * 1.8 || tempC > profile.TargetTempMax
-                ? IncidentSeverity.Critical
-                : IncidentSeverity.Warning;
-            RegisterIssue(sev, primaryTrigger ?? IncidentTriggerType.RapidTrendAnomaly,
-                $"Стремительный рост температуры +{tempVelocityPerMin:F2} °C/мин (допустимо не быстрее +{profile.MaxAllowedTempRiseRatePerMin:F2} °C/мин)");
+            // Если предыдущее измерение было ниже нормы и температура просто вошла в зеленый коридор снизу — не считаем перегревом, пока T <= середины коридора
+            double targetMid = (profile.TargetTempMin + profile.TargetTempMax) * 0.5;
+            if (tempC > targetMid)
+            {
+                var sev = tempVelocityPerMin >= profile.MaxAllowedTempRiseRatePerMin * 1.8 || tempC > profile.TargetTempMax
+                    ? IncidentSeverity.Critical
+                    : IncidentSeverity.Warning;
+                RegisterIssue(sev, primaryTrigger ?? IncidentTriggerType.RapidTrendAnomaly,
+                    $"Стремительный рост температуры +{tempVelocityPerMin:F2} °C/мин (допустимо не быстрее +{profile.MaxAllowedTempRiseRatePerMin:F2} °C/мин)");
+            }
         }
 
         // 4. Влажность воздуха

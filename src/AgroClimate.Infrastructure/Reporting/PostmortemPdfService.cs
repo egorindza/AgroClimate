@@ -2,6 +2,7 @@ using AgroClimate.Application.DTOs;
 using AgroClimate.Application.Interfaces;
 using AgroClimate.Domain.Entities;
 using AgroClimate.Domain.Enums;
+using QuestPDF.Drawing;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -16,10 +17,37 @@ public sealed class PostmortemPdfService : IPostmortemPdfService
 {
     private readonly IIncidentService _incidentService;
     private readonly ITelemetryAnalyticsService _analyticsService;
+    private static bool _fontsInitialized;
+    private static readonly object FontLock = new();
 
     static PostmortemPdfService()
     {
-        QuestPDF.Settings.License = LicenseType.Community;
+        EnsureQuestPdfConfigured();
+    }
+
+    private static void EnsureQuestPdfConfigured()
+    {
+        lock (FontLock)
+        {
+            if (_fontsInitialized) return;
+
+            QuestPDF.Settings.License = LicenseType.Community;
+            QuestPDF.Settings.UseSystemFonts = true;
+            QuestPDF.Settings.ThrowOnMissingTextGlyphs = false;
+
+            var winFonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+            foreach (var file in new[] { "segoeui.ttf", "segoeuib.ttf", "arial.ttf", "arialbd.ttf" })
+            {
+                var fullPath = Path.Combine(winFonts, file);
+                if (File.Exists(fullPath))
+                {
+                    using var stream = File.OpenRead(fullPath);
+                    FontManager.RegisterFontFromStream(stream);
+                }
+            }
+
+            _fontsInitialized = true;
+        }
     }
 
     public PostmortemPdfService(
@@ -51,7 +79,7 @@ public sealed class PostmortemPdfService : IPostmortemPdfService
 
     public static byte[] RenderDocument(Incident incident, AgroProfileTemporalHistoryDto? temporalProfile)
     {
-        QuestPDF.Settings.License = LicenseType.Community;
+        EnsureQuestPdfConfigured();
 
         var irkutskOffset = TimeSpan.FromHours(8); // Иркутское время UTC+8
         string FormatIrkutsk(DateTime? utc) =>
