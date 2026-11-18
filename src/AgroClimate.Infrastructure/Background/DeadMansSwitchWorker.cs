@@ -39,8 +39,8 @@ public sealed class DeadMansSwitchWorker : BackgroundService
     {
         _logger.LogInformation("Запущен сторожевой монитор Dead Man's Switch (PeriodicTimer = 2 с).");
 
-        // Даем приложению и сидеру завершить стартовую инициализацию
-        await Task.Delay(TimeSpan.FromSeconds(4), stoppingToken);
+        // Даем приложению, сидеру и первому циклу симулятора гарантированно прогреться после старта
+        await Task.Delay(TimeSpan.FromSeconds(12), stoppingToken);
 
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
         while (await timer.WaitForNextTickAsync(stoppingToken))
@@ -81,11 +81,15 @@ public sealed class DeadMansSwitchWorker : BackgroundService
             if (zone.AgroProfile is null || !zone.LastTelemetryUtc.HasValue)
                 continue;
 
+            int effectiveTimeout = _simulator.GetStatus().ActiveScenario == SimulationScenario.PotatoStorageDeadMansSwitch
+                ? 8
+                : Math.Max(35, zone.HeartbeatTimeoutSeconds);
+
             double silenceSec = (now - zone.LastTelemetryUtc.Value).TotalSeconds;
-            if (silenceSec <= zone.HeartbeatTimeoutSeconds)
+            if (silenceSec <= effectiveTimeout)
                 continue;
 
-            string msg = $"Потеря сигнала от контроллера {zone.ControllerNodeId}: нет пакетов {silenceSec:F0} с (таймаут {zone.HeartbeatTimeoutSeconds} с). Возможен обрыв RS-485/питания.";
+            string msg = $"Потеря сигнала от контроллера {zone.ControllerNodeId}: нет пакетов {silenceSec:F0} с (таймаут {effectiveTimeout} с). Возможен обрыв RS-485/питания.";
 
             bool justWentOffline = zone.IsSensorOnline;
             zone.IsSensorOnline = false;
