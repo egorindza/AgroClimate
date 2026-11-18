@@ -1,6 +1,6 @@
 @model DashboardViewModel
 @{
-    ViewData["Title"] = "Карта объектов ИрГАУ";
+    ViewData["Title"] = "Обзор и карта зон";
     int onlineCount = Model.Zones.Count(z => z.IsSensorOnline);
 }
 
@@ -12,109 +12,144 @@
             <div style="display:flex;align-items:center;gap:0.8rem;">
                 <span class="status-dot critical"></span>
                 <div>
-                    <div style="font-weight:800;color:var(--accent-red);font-size:0.94rem;">
-                        АКТИВНАЯ ТРЕВОГА @topInc.IncidentNumber (@topInc.Zone?.Name) • В работе инцидентов: @Model.ActiveIncidents.Count
+                    <div style="font-weight:800;color:var(--agro-danger);">
+                        Активная тревога @topInc.IncidentNumber (@topInc.Zone?.Name) · В работе инцидентов: @Model.ActiveIncidents.Count
                     </div>
-                    <div style="font-size:0.83rem;color:var(--text-primary);">@topInc.AlertSummary</div>
+                    <div style="font-size:0.86rem;">@topInc.AlertSummary</div>
                 </div>
             </div>
             <div style="display:flex;gap:0.5rem;">
-                <a href="/Incidents/WarRoom/@topInc.Id" class="mc-btn mc-btn-danger">Войти в Incident War Room →</a>
-                <a href="/Incidents" class="mc-btn">Все инциденты (@Model.ActiveIncidents.Count)</a>
+                <a href="/Incidents/WarRoom/@topInc.Id" class="btn btn-danger btn-sm">Войти в Incident War Room →</a>
+                <a href="/Incidents" class="btn btn-outline-secondary btn-sm">Все инциденты (@Model.ActiveIncidents.Count)</a>
             </div>
         </div>
     }
 </div>
 
-<!-- Сводная лента KPI диспетчерского центра -->
-<div class="kpi-grid tabular">
-    <div class="kpi-tile">
-        <div class="kpi-label">Объекты на связи</div>
-        <div class="kpi-value" style="color:var(--accent-emerald);">@onlineCount <span style="font-size:1rem;color:var(--text-secondary);">из 5 узлов</span></div>
-        <div class="kpi-sub">Контроль пульса Dead Man's Switch (PeriodicTimer)</div>
-    </div>
-    <div class="kpi-tile">
-        <div class="kpi-label">Климатический SLA (48 часов)</div>
-        <div class="kpi-value" style="color:var(--accent-cyan);">@Model.GlobalSlaPercent.ToString("F2")%</div>
-        <div class="kpi-sub">Расчет по Columnstore Index + T-SQL Window LAG</div>
-    </div>
-    <div class="kpi-tile">
-        <div class="kpi-label">Конвейер Channels → SqlBulkCopy</div>
-        <div class="kpi-value">@Model.PipelineMetrics.ColumnstoreTotalRows.ToString("N0")</div>
-        <div class="kpi-sub">Записей в БД • Последний батч: @Model.PipelineMetrics.LastFlushDurationMs.ToString("F1") мс</div>
-    </div>
-    <div class="kpi-tile">
-        <div class="kpi-label">Наружный фон (Иркутск / учхоз)</div>
-        <div class="kpi-value" id="irkutsk-ambient-val" style="color:@(Model.SimulatorStatus.IrkutskAmbientTempC <= -30 ? "var(--accent-red)" : "var(--text-primary)");">
-            @(Model.SimulatorStatus.IrkutskAmbientTempC > 0 ? "+" : "")@Model.SimulatorStatus.IrkutskAmbientTempC.ToString("F1") °C
-        </div>
-        <div class="kpi-sub">Метеопост учхоза «Оёкское» ИрГАУ (Восточная Сибирь)</div>
-    </div>
-</div>
-
-<!-- Панель встроенного IoT-симулятора сценариев (HTMX + SignalR) -->
-<div id="simulator-deck-host">
-    @await Html.PartialAsync("_SimulatorDeck", Model.SimulatorStatus)
-</div>
-
-<!-- Заголовок секции + HTMX-фильтрация без перезагрузки страницы -->
-<div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;flex-wrap:wrap;margin-bottom:0.9rem;">
+<section class="dashboard-hero">
     <div>
-        <h1 style="margin:0;font-size:1.22rem;font-weight:800;">Карта объектов и климатических зон ИрГАУ</h1>
-        <div style="font-size:0.8rem;color:var(--text-secondary);">
-            Стриминг показаний каждые 2 секунды по SignalR • Расчет точки росы (T<sub>dp</sub>) и дефицита упругости пара (VPD) в реальном времени
+        <p class="eyebrow">ИрГАУ AgroClimate War Room · комплекс телеметрии Восточной Сибири</p>
+        <h1>От непрерывного потока датчиков к ранней защите урожая.</h1>
+        <p>Контролируйте температуру, влажность, CO₂, точку росы (T<sub>dp</sub>) и дефицит упругости пара (VPD) в теплицах, биолабораториях и хранилищах ИрГАУ, выявляйте опасные тренды оконными функциями T-SQL до пересечения критического нуля и координируйте смену в живой комнате инцидента.</p>
+        <div class="header-actions mt-3">
+            <a class="btn btn-primary" href="/Incidents">Открыть Incident War Room</a>
+            <a class="btn btn-outline-primary" href="/Analytics">Аналитика SLA и тренды</a>
+            <a class="btn btn-outline-secondary" href="/Profiles">Конструктор агро-профилей</a>
+        </div>
+    </div>
+    <div class="hero-illustration" aria-hidden="true">
+        <svg viewBox="0 0 260 170">
+            <path d="M12 138C58 134 82 96 130 92s66-42 118-46" fill="none" stroke="currentColor" stroke-width="3.2" />
+            <path d="M12 114C60 112 86 76 132 72s64-28 116-30" fill="none" stroke="#d97706" stroke-width="2" stroke-dasharray="6 4" />
+            <path d="M12 154C66 150 90 126 136 122s62-20 112-24" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4" />
+            <circle cx="130" cy="92" r="5" fill="currentColor" />
+            <circle cx="204" cy="54" r="5" fill="currentColor" />
+            <rect x="241" y="36" width="11" height="11" rx="2" fill="#d97706" />
+        </svg>
+    </div>
+</section>
+
+<section class="dashboard-section">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Оперативная сводка телеметрии</p>
+            <h2>Ключевые показатели комплекса ИрГАУ</h2>
+        </div>
+        <p>Быстрый переход к любому объекту или инциденту: <kbd class="cmdk-kbd">Ctrl + K</kbd></p>
+    </div>
+    <div class="analysis-summary">
+        <article>
+            <span>Узлы контроллеров на связи</span>
+            <strong>@onlineCount из 5</strong>
+            <small>сторожевой контроль Dead Man's Switch</small>
+        </article>
+        <article>
+            <span>Климатический SLA (48 часов)</span>
+            <strong>@Model.GlobalSlaPercent.ToString("F2")%</strong>
+            <small>Columnstore Index + оконная функция LAG</small>
+        </article>
+        <article>
+            <span>Записей в Columnstore</span>
+            <strong id="kpi-columnstore-rows">@Model.PipelineMetrics.ColumnstoreTotalRows.ToString("N0")</strong>
+            <small>пакетная вставка SqlBulkCopy: @Model.PipelineMetrics.LastFlushDurationMs.ToString("F1") мс</small>
+        </article>
+        <article>
+            <span>Метеофон (Иркутск / учхоз)</span>
+            <strong id="irkutsk-ambient-val">@(Model.SimulatorStatus.IrkutskAmbientTempC > 0 ? "+" : "")@Model.SimulatorStatus.IrkutskAmbientTempC.ToString("F1") °C</strong>
+            <small>наружная температура площадки «Оёкское»</small>
+        </article>
+    </div>
+</section>
+
+<section class="dashboard-section" id="simulator-deck-host">
+    @await Html.PartialAsync("_SimulatorDeck", Model.SimulatorStatus)
+</section>
+
+<section class="dashboard-section">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Живой мониторинг объектов</p>
+            <h2>Карта климатических зон ИрГАУ</h2>
+            <p class="mt-1">Показания обновляются каждые 2 секунды по SignalR · Расчёт точки росы (T<sub>dp</sub>) и дефицита упругости пара (VPD) в реальном времени</p>
+        </div>
+
+        <div class="mode-tabs" id="zone-filter-bar">
+            <button type="button"
+                    class="mode-tab-btn @(Model.ActiveFilter == "all" ? "active" : "")"
+                    hx-get="/Dashboard/ZonesPartial?filter=all"
+                    hx-target="#zones-grid-host"
+                    hx-swap="innerHTML"
+                    onclick="setZoneFilterBtn(this)">
+                Все объекты (5)
+            </button>
+            <button type="button"
+                    class="mode-tab-btn @(Model.ActiveFilter == "optimal" ? "active" : "")"
+                    hx-get="/Dashboard/ZonesPartial?filter=optimal"
+                    hx-target="#zones-grid-host"
+                    hx-swap="innerHTML"
+                    onclick="setZoneFilterBtn(this)">
+                В зелёном коридоре
+            </button>
+            <button type="button"
+                    class="mode-tab-btn @(Model.ActiveFilter == "warning" ? "active" : "")"
+                    hx-get="/Dashboard/ZonesPartial?filter=warning"
+                    hx-target="#zones-grid-host"
+                    hx-swap="innerHTML"
+                    onclick="setZoneFilterBtn(this)">
+                Предупреждение / тренд
+            </button>
+            <button type="button"
+                    class="mode-tab-btn @(Model.ActiveFilter == "critical" ? "active" : "")"
+                    hx-get="/Dashboard/ZonesPartial?filter=critical"
+                    hx-target="#zones-grid-host"
+                    hx-swap="innerHTML"
+                    onclick="setZoneFilterBtn(this)">
+                Авария / обрыв связи
+            </button>
         </div>
     </div>
 
-    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;" id="zone-filter-bar">
-        <button type="button"
-                class="mc-btn mc-btn-sm @(Model.ActiveFilter == "all" ? "mc-btn-primary" : "")"
-                hx-get="/Dashboard/ZonesPartial?filter=all"
-                hx-target="#zones-grid-host"
-                hx-swap="innerHTML"
-                onclick="setZoneFilterBtn(this)">
-            Все объекты (5)
-        </button>
-        <button type="button"
-                class="mc-btn mc-btn-sm @(Model.ActiveFilter == "optimal" ? "mc-btn-primary" : "")"
-                hx-get="/Dashboard/ZonesPartial?filter=optimal"
-                hx-target="#zones-grid-host"
-                hx-swap="innerHTML"
-                onclick="setZoneFilterBtn(this)">
-            🟢 В зеленом коридоре
-        </button>
-        <button type="button"
-                class="mc-btn mc-btn-sm @(Model.ActiveFilter == "warning" ? "mc-btn-primary" : "")"
-                hx-get="/Dashboard/ZonesPartial?filter=warning"
-                hx-target="#zones-grid-host"
-                hx-swap="innerHTML"
-                onclick="setZoneFilterBtn(this)">
-            🟡 Предупреждение / Тренд
-        </button>
-        <button type="button"
-                class="mc-btn mc-btn-sm @(Model.ActiveFilter == "critical" ? "mc-btn-primary" : "")"
-                hx-get="/Dashboard/ZonesPartial?filter=critical"
-                hx-target="#zones-grid-host"
-                hx-swap="innerHTML"
-                onclick="setZoneFilterBtn(this)">
-            🔴 Авария / Потеря связи
-        </button>
+    <div id="zones-grid-host">
+        @await Html.PartialAsync("_ZoneCardsGrid", Model)
     </div>
-</div>
+</section>
 
-<div id="zones-grid-host">
-    @await Html.PartialAsync("_ZoneCardsGrid", Model)
-</div>
+<section class="workflow-strip">
+    <strong>Архитектурный конвейер:</strong>
+    <span>1. Датчики ESP32 / C# IoT-симулятор</span>
+    <span>→</span>
+    <span>2. Буфер System.Threading.Channels</span>
+    <span>→</span>
+    <span>3. Пакетная запись SqlBulkCopy в Columnstore</span>
+    <span>→</span>
+    <span>4. Правила тревог, Temporal Tables и SignalR War Room</span>
+</section>
 
 @section Scripts {
     <script>
         function setZoneFilterBtn(clicked) {
-            document.querySelectorAll("#zone-filter-bar .mc-btn").forEach(b => b.classList.remove("mc-btn-primary"));
-            clicked.classList.add("mc-btn-primary");
+            document.querySelectorAll("#zone-filter-bar .mode-tab-btn").forEach(b => b.classList.remove("active"));
+            clicked.classList.add("active");
         }
-        document.addEventListener("DOMContentLoaded", function () {
-            var pipeRows = document.getElementById("pipe-total-rows");
-            if (pipeRows) pipeRows.textContent = "@Model.PipelineMetrics.ColumnstoreTotalRows.ToString("N0")";
-        });
     </script>
 }

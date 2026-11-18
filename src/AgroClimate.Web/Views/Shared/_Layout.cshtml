@@ -1,113 +1,186 @@
 ﻿@inject AgroClimate.Application.Interfaces.ITelemetryChannel TelemetryChannel
 @{
-    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "Dashboard";
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "Dashboard";
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+    var homeActive = controller == "Dashboard" && action == "Index";
     var roleKey = User.GetRoleKey();
     var fullName = User.GetFullName();
     var roleTitle = User.GetRoleTitle();
     var returnUrl = Context.Request.Path + Context.Request.QueryString;
     var pipeMetrics = TelemetryChannel.GetMetrics();
+
+    (string SectionTitle, string SectionUrl)? parentCrumb = controller switch
+    {
+        "Incidents" => ("Incident War Room", "/Incidents"),
+        "Profiles" => ("Агро-профили культур", "/Profiles"),
+        "Analytics" => ("Аналитика SLA и тренды", "/Analytics"),
+        "ApiKeys" => ("Шлюз ESP32 и API-ключи", "/ApiKeys"),
+        "Auth" => ("Роли специалистов ИрГАУ", "/Auth/Login"),
+        _ => null
+    };
 }
 <!DOCTYPE html>
-<html lang="ru" data-theme="dark">
+<html lang="ru" data-theme="light">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] — AgroClimate War Room | ИрГАУ</title>
+    <title>@ViewData["Title"] — ИрГАУ AgroClimate War Room</title>
     <script>
         (function () {
             try {
-                var saved = localStorage.getItem("agroclimate-theme") || "dark";
-                document.documentElement.setAttribute("data-theme", saved);
+                var saved = localStorage.getItem('agroclimate-theme');
+                if (saved === 'dark' || saved === 'light') {
+                    document.documentElement.setAttribute('data-theme', saved);
+                }
             } catch (e) { }
         })();
     </script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
-    <header class="mc-navbar">
-        <div style="max-width:1520px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:0.9rem;flex-wrap:wrap;">
-            <div style="display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;">
-                <a href="/" class="mc-brand">
-                    <span class="mc-brand-mark">AC</span>
-                    <span>
-                        AgroClimate War Room
-                        <span class="mc-brand-sub">ИрГАУ им. А.А. Ежевского • Телеметрия Сибири</span>
-                    </span>
-                </a>
+<a class="skip-link" href="#main-content">К основному содержимому</a>
 
-                <nav class="mc-nav-links">
-                    <a href="/" class="mc-nav-link @(currentController == "Dashboard" ? "active" : "")">
-                        <span>🛰</span> Карта объектов
-                    </a>
-                    <a href="/Incidents" class="mc-nav-link @(currentController == "Incidents" ? "active" : "")">
-                        <span>🚨</span> Incident War Room
-                    </a>
-                    <a href="/Profiles" class="mc-nav-link @(currentController == "Profiles" ? "active" : "")">
-                        <span>🌱</span> Агро-профили
-                    </a>
-                    <a href="/Analytics" class="mc-nav-link @(currentController == "Analytics" ? "active" : "")">
-                        <span>📈</span> Аналитика и SLA
-                    </a>
-                    <a href="/ApiKeys" class="mc-nav-link @(currentController == "ApiKeys" ? "active" : "")">
-                        <span>🔌</span> ESP32 / API
-                    </a>
-                </nav>
-            </div>
+<header class="mobile-header">
+    <a class="mobile-brand" href="/"><span class="brand-mark" aria-hidden="true"></span> ИрГАУ AgroClimate</a>
+    <button class="menu-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavigation" aria-controls="mainNavigation" aria-expanded="false" aria-label="Открыть или закрыть навигацию">
+        <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
+    </button>
+</header>
 
-            <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;">
-                <div class="mc-pipeline-pill tabular" title="Потоковый конвейер: System.Threading.Channels → SqlBulkCopy → Columnstore Index → SignalR">
-                    <span id="sr-conn-dot" class="status-dot optimal"></span>
-                    <span id="sr-conn-text" style="font-weight:700;">SignalR Live</span>
-                    <span style="opacity:0.4;">|</span>
-                    <span>Columnstore: <strong id="pipe-total-rows">@(pipeMetrics.ColumnstoreTotalRows > 0 ? pipeMetrics.ColumnstoreTotalRows.ToString("N0") : "—")</strong></span>
-                    <span style="opacity:0.4;">|</span>
-                    <span>Bulk: <strong id="pipe-flush-ms">1.4 мс</strong></span>
-                </div>
+<div class="app-frame">
+    <aside class="app-sidebar collapse" id="mainNavigation">
+        <a class="app-brand" href="/">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span>ИрГАУ <strong>AgroClimate</strong><small>Телеметрия и War Room · V2</small></span>
+        </a>
 
-                <!-- Демо-переключатель ролей в 1 клик -->
-                <div style="display:inline-flex;align-items:center;gap:0.35rem;background:var(--bg-surface-muted);border:1px solid var(--border-subtle);border-radius:9px;padding:0.22rem 0.4rem;">
-                    <form method="post" action="/Auth/SwitchRole" style="margin:0;display:inline;">
-                        <input type="hidden" name="roleKey" value="@DemoRoles.ChiefAgronomist" />
-                        <input type="hidden" name="returnUrl" value="@returnUrl" />
-                        <button type="submit" class="mc-btn mc-btn-sm @(roleKey == DemoRoles.ChiefAgronomist ? "mc-btn-primary" : "")" title="Главный агроном / Научный руководитель (полный доступ)">Агроном</button>
-                    </form>
-                    <form method="post" action="/Auth/SwitchRole" style="margin:0;display:inline;">
-                        <input type="hidden" name="roleKey" value="@DemoRoles.ShiftEngineer" />
-                        <input type="hidden" name="returnUrl" value="@returnUrl" />
-                        <button type="submit" class="mc-btn mc-btn-sm @(roleKey == DemoRoles.ShiftEngineer ? "mc-btn-primary" : "")" title="Дежурный инженер КИПиА (War Room + ESP32 API)">КИПиА</button>
-                    </form>
-                    <form method="post" action="/Auth/SwitchRole" style="margin:0;display:inline;">
-                        <input type="hidden" name="roleKey" value="@DemoRoles.LabAssistant" />
-                        <input type="hidden" name="returnUrl" value="@returnUrl" />
-                        <button type="submit" class="mc-btn mc-btn-sm @(roleKey == DemoRoles.LabAssistant ? "mc-btn-primary" : "")" title="Лаборант биолаборатории">Лаборант</button>
-                    </form>
-                    <a href="/Auth/Login?returnUrl=@Uri.EscapeDataString(returnUrl)" class="mc-btn mc-btn-sm" title="@fullName — @roleTitle" style="border-style:dashed;">
-                        👤 @fullName
-                    </a>
-                </div>
+        <nav aria-label="Основная навигация">
+            <p class="nav-caption">Мониторинг и War Room</p>
+            <a class="side-link @(homeActive ? "active" : "")" aria-current="@(homeActive ? "page" : null)" href="/">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#home"></use></svg>Обзор и карта зон
+            </a>
+            <a class="side-link @(controller == "Incidents" ? "active" : "")" href="/Incidents">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#warning"></use></svg>Incident War Room
+            </a>
 
-                <button type="button" onclick="toggleMcTheme()" class="mc-btn mc-btn-sm" title="Переключить темную/светлую тему диспетчерской">
-                    <span id="mc-theme-btn-label">☀ Светлая</span>
-                </button>
+            <p class="nav-caption">Нормы и Аналитика</p>
+            <a class="side-link @(controller == "Profiles" ? "active" : "")" href="/Profiles">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#yield"></use></svg>Агро-профили культур
+            </a>
+            <a class="side-link @(controller == "Analytics" ? "active" : "")" href="/Analytics">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#forecast"></use></svg>Аналитика SLA и тренды
+            </a>
+
+            <p class="nav-caption">Оборудование и Интеграция</p>
+            <a class="side-link @(controller == "ApiKeys" ? "active" : "")" href="/ApiKeys">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#sensor"></use></svg>Шлюз ESP32 и API-ключи
+            </a>
+
+            <p class="nav-caption">Профиль и Демо-стенд</p>
+            <a class="side-link @(controller == "Auth" ? "active" : "")" href="/Auth/Login?returnUrl=@Uri.EscapeDataString(returnUrl)">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#user"></use></svg>Выбор роли специалиста
+            </a>
+        </nav>
+
+        <div class="sidebar-user-box mt-3">
+            <strong>@fullName</strong>
+            <span>@roleTitle</span>
+            <div class="sidebar-role-pills" title="Быстрое переключение демо-роли в 1 клик">
+                <form method="post" action="/Auth/SwitchRole" style="margin:0;display:inline;">
+                    <input type="hidden" name="roleKey" value="@DemoRoles.ChiefAgronomist" />
+                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                    <button type="submit" class="sidebar-role-btn @(roleKey == DemoRoles.ChiefAgronomist ? "active" : "")">Агроном</button>
+                </form>
+                <form method="post" action="/Auth/SwitchRole" style="margin:0;display:inline;">
+                    <input type="hidden" name="roleKey" value="@DemoRoles.ShiftEngineer" />
+                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                    <button type="submit" class="sidebar-role-btn @(roleKey == DemoRoles.ShiftEngineer ? "active" : "")">КИПиА</button>
+                </form>
+                <form method="post" action="/Auth/SwitchRole" style="margin:0;display:inline;">
+                    <input type="hidden" name="roleKey" value="@DemoRoles.LabAssistant" />
+                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                    <button type="submit" class="sidebar-role-btn @(roleKey == DemoRoles.LabAssistant ? "active" : "")">Лаборант</button>
+                </form>
             </div>
         </div>
-    </header>
+        <p class="sidebar-note">Контроль микроклимата · Иркутская область</p>
+    </aside>
 
-    <main class="mc-container">
-        @RenderBody()
-    </main>
+    <div class="app-workspace">
+        <header class="workspace-header">
+            <div class="workspace-header-left">
+                <span>ИрГАУ AgroClimate</span>
+                <span class="version-pill">
+                    <span id="sr-conn-dot" class="status-dot optimal"></span>
+                    <span id="sr-conn-text">SignalR Live</span>
+                </span>
+                <span class="d-none d-xl-inline tabular">
+                    Columnstore: <strong id="pipe-total-rows">@(pipeMetrics.ColumnstoreTotalRows > 0 ? pipeMetrics.ColumnstoreTotalRows.ToString("N0") : "—")</strong>
+                    · SqlBulkCopy: <strong id="pipe-flush-ms">@pipeMetrics.LastFlushDurationMs.ToString("F1") мс</strong>
+                </span>
+            </div>
+            <div class="workspace-header-right">
+                <button type="button" id="cmdkOpenBtn" class="cmdk-trigger-btn" title="Быстрый поиск по разделам, объектам и инцидентам (Ctrl+K)">
+                    <span>🔍 Быстрый переход</span>
+                    <kbd class="cmdk-kbd">Ctrl K</kbd>
+                </button>
+                <button type="button" id="themeToggleBtn" onclick="toggleMcTheme()" class="theme-toggle-btn">☾ Тёмная</button>
+                <a href="/Auth/Login?returnUrl=@Uri.EscapeDataString(returnUrl)" class="btn btn-sm btn-outline-primary">@fullName</a>
+            </div>
+        </header>
 
-    <footer style="border-top:1px solid var(--border-subtle);padding:0.9rem 1.35rem;text-align:center;color:var(--text-muted);font-size:0.78rem;">
-        АИС «AgroClimate War Room» • Портфолио-система телеметрии микроклимата ИрГАУ и агропредприятий Сибири •
-        <code>Channels → SqlBulkCopy → Columnstore + Temporal Tables + T-SQL Window Functions + SignalR + HTMX</code>
-    </footer>
+        <main id="main-content" class="app-main">
+            <div class="app-shell">
+                @if (!homeActive && parentCrumb is { } crumb)
+                {
+                    <nav class="agro-breadcrumbs no-print" aria-label="Навигационная цепочка">
+                        <a href="/">Обзор</a>
+                        <span class="crumb-sep">/</span>
+                        @if (action == "Index" && controller != "Auth")
+                        {
+                            <span class="crumb-current">@crumb.SectionTitle</span>
+                        }
+                        else
+                        {
+                            <a href="@crumb.SectionUrl">@crumb.SectionTitle</a>
+                            <span class="crumb-sep">/</span>
+                            <span class="crumb-current">@ViewData["Title"]</span>
+                        }
+                    </nav>
+                }
+                @RenderBody()
+            </div>
+        </main>
 
-    <div id="mc-toast-container"></div>
+        <footer class="app-footer">
+            <div class="app-shell">
+                <span>ИрГАУ AgroClimate War Room · Система телеметрии микроклимата и управления инцидентами Сибири</span>
+                <span>Точка росы: Магнус–Тетенс · VPD: кПа · Columnstore + Temporal Tables · Поиск: Ctrl+K</span>
+            </div>
+        </footer>
+    </div>
+</div>
 
-    <script src="~/vendor/htmx.min.js" asp-append-version="true"></script>
-    <script src="~/vendor/signalr.min.js" asp-append-version="true"></script>
-    <script src="~/vendor/chart.umd.min.js" asp-append-version="true"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-    @await RenderSectionAsync("Scripts", required: false)
+<!-- Модальное окно быстрого перехода Command Palette (Ctrl + K) -->
+<div id="cmdkBackdrop" class="cmdk-backdrop no-print" role="dialog" aria-modal="true" aria-label="Быстрый переход по платформе">
+    <div class="cmdk-modal">
+        <div class="cmdk-header">
+            <span>🔍</span>
+            <input id="cmdkInput" type="search" class="cmdk-input" placeholder="Введите раздел, теплицу, силос, культуру или номер инцидента (INC-2026)…" autocomplete="off" />
+            <kbd class="cmdk-kbd">Esc</kbd>
+        </div>
+        <ul id="cmdkList" class="cmdk-list"></ul>
+    </div>
+</div>
+
+<div id="mc-toast-container"></div>
+
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/vendor/htmx.min.js" asp-append-version="true"></script>
+<script src="~/vendor/signalr.min.js" asp-append-version="true"></script>
+<script src="~/vendor/chart.umd.min.js" asp-append-version="true"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

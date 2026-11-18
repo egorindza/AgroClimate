@@ -1,53 +1,44 @@
 @model IReadOnlyList<DemoRoles.DemoPersona>
 @{
-    ViewData["Title"] = "Демо-вход по ролям ИрГАУ";
+    ViewData["Title"] = "Выбор демо-роли специалиста";
     string returnUrl = ViewData["ReturnUrl"]?.ToString() ?? "/";
     string currentRole = User.GetRoleKey();
 }
 
-<div style="max-width:980px;margin:1.5rem auto;">
-    <div style="text-align:center;margin-bottom:1.6rem;">
-        <span class="mc-badge mc-badge-optimal">ДЕМО-РЕЖИМ ПОРТФОЛИО • ВХОД В 1 КЛИК</span>
-        <h1 style="margin:0.6rem 0 0.35rem;font-size:1.55rem;font-weight:900;">
-            Выберите рабочую роль специалиста ИрГАУ
-        </h1>
-        <div style="color:var(--text-secondary);max-width:650px;margin:0 auto;">
-            Каждая роль определяет уровень полномочий в конструкторе агро-профилей, оперативной комнате
-            Incident War Room и управлении ключами телеметрии ESP32, а также фиксируется в системном аудите.
-        </div>
+<header class="page-header">
+    <div>
+        <p class="eyebrow">Демонстрационный режим портфолио · вход в 1 клик</p>
+        <h1>Выбор рабочей роли специалиста ИрГАУ</h1>
+        <p class="page-description">Каждая роль определяет уровень полномочий в конструкторе агро-профилей (Temporal Tables), оперативной комнате Incident War Room и управлении ключами телеметрии ESP32, а также фиксируется в системном аудите.</p>
     </div>
+</header>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(285px,1fr));gap:1.1rem;">
-        @foreach (var persona in Model)
-        {
-            bool isActive = persona.RoleKey == currentRole;
-            <div class="mc-card" style="display:flex;flex-direction:column;justify-content:space-between;border-color:@(isActive ? "var(--accent-emerald)" : "var(--border-subtle)");">
+<div class="row g-3">
+    @foreach (var persona in Model)
+    {
+        bool isActive = persona.RoleKey == currentRole;
+        <div class="col-lg-4">
+            <div class="panel @(isActive ? "preview-highlight" : "") h-100 d-flex flex-column justify-content-between">
                 <div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.65rem;">
-                        <span class="mc-badge @(isActive ? "mc-badge-optimal" : "mc-badge-info")">
-                            @(isActive ? "АКТИВНАЯ СЕССИЯ" : "РОЛЬ ИрГАУ")
+                    <div class="mb-2">
+                        <span class="agro-badge @(isActive ? "" : "agro-badge-info")">
+                            @(isActive ? "Активная сессия" : "Роль специалиста ИрГАУ")
                         </span>
                     </div>
-                    <h2 style="margin:0 0 0.25rem;font-size:1.08rem;font-weight:800;">@persona.RoleTitle</h2>
-                    <div style="font-weight:700;color:var(--accent-cyan);font-size:0.9rem;margin-bottom:0.2rem;">
-                        👤 @persona.FullName
-                    </div>
-                    <div style="font-size:0.77rem;color:var(--text-muted);margin-bottom:0.8rem;">
-                        @persona.Department
-                    </div>
-                    <p style="font-size:0.83rem;color:var(--text-secondary);margin-bottom:1.1rem;">
-                        @persona.CapabilitiesSummary
-                    </p>
+                    <h2 class="h5 fw-bold mb-1">@persona.RoleTitle</h2>
+                    <div class="fw-bold mb-1" style="color:var(--agro-primary);">@persona.FullName</div>
+                    <div class="small text-muted mb-3">@persona.Department</div>
+                    <p class="small text-muted mb-4">@persona.CapabilitiesSummary</p>
                 </div>
 
                 <form method="post" action="/Auth/SwitchRole" style="margin:0;">
                     <input type="hidden" name="roleKey" value="@persona.RoleKey" />
                     <input type="hidden" name="returnUrl" value="@returnUrl" />
-                    <button type="submit" class="mc-btn mc-btn-primary" style="width:100%;">
-                        Войти в 1 клик как @persona.FullName →
+                    <button type="submit" class="btn @(isActive ? "btn-outline-primary" : "btn-primary") w-100">
+                        @(isActive ? $"Продолжить как {persona.FullName}" : $"Войти в 1 клик как {persona.FullName} →")
                     </button>
                 </form>
             </div>
-        }
-    </div>
+        </div>
+    }
 </div>

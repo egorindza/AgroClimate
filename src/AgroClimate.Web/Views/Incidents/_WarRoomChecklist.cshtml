@@ -1,20 +1,18 @@
 @model Incident
 
-<div class="mc-card" style="margin-bottom:1.1rem;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.65rem;">
+<div class="panel mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
         <div>
-            <h2 style="margin:0;font-size:1.02rem;font-weight:800;">📋 Аварийный чек-лист экстренного регламента ИрГАУ</h2>
-            <div style="font-size:0.78rem;color:var(--text-secondary);">
-                Отмечайте выполненные инженерно-агрономические действия (синхронизируется в реальном времени по SignalR)
-            </div>
+            <p class="eyebrow mb-0">Экстренный регламент реагирования</p>
+            <h2 class="h5 fw-bold mb-0">Чек-лист дежурной смены ИрГАУ</h2>
         </div>
-        <span class="mc-badge @(Model.ChecklistCompletionPercent == 100 ? "mc-badge-optimal" : "mc-badge-info") tabular" id="wr-checklist-pct">
+        <span class="agro-badge tabular" id="wr-checklist-pct">
             Выполнено: @Model.ChecklistCompletionPercent%
         </span>
     </div>
 
-    <div style="height:8px;background:var(--bg-surface-muted);border-radius:999px;overflow:hidden;margin-bottom:0.85rem;border:1px solid var(--border-subtle);">
-        <div id="wr-checklist-bar" style="height:100%;width:@Model.ChecklistCompletionPercent%;background:var(--accent-emerald);transition:width 0.3s ease;"></div>
+    <div style="height:8px;background:var(--agro-surface-alt);border-radius:999px;overflow:hidden;margin:0.65rem 0 0.9rem;border:1px solid var(--agro-border);">
+        <div id="wr-checklist-bar" style="height:100%;width:@Model.ChecklistCompletionPercent%;background:var(--agro-primary);transition:width 0.3s ease;"></div>
     </div>
 
     @foreach (var item in Model.ChecklistItems.OrderBy(x => x.StepOrder))
@@ -32,13 +30,13 @@
                 <button type="submit" class="checklist-row @(item.IsCompleted ? "done" : "")" style="width:100%;text-align:left;">
                     <span style="font-size:1.05rem;line-height:1.2;">@(item.IsCompleted ? "✅" : "⬜")</span>
                     <div style="flex:1;">
-                        <div style="font-weight:600;font-size:0.87rem;@(item.IsCompleted ? "text-decoration:line-through;opacity:0.85;" : "")">
+                        <div style="font-weight:650;font-size:.88rem;@(item.IsCompleted ? "text-decoration:line-through;opacity:0.85;" : "")">
                             Шаг @item.StepOrder. @item.Instruction
                         </div>
                         @if (item.IsCompleted && item.CompletedAtUtc.HasValue)
                         {
-                            <div style="font-size:0.74rem;color:var(--accent-emerald);margin-top:0.15rem;">
-                                Выполнено: @item.CompletedBy • @item.CompletedAtUtc.Value.AddHours(8).ToString("HH:mm:ss") (ИРК)
+                            <div style="font-size:.76rem;color:var(--agro-primary);margin-top:.15rem;">
+                                Выполнено: @item.CompletedBy · @item.CompletedAtUtc.Value.AddHours(8).ToString("HH:mm:ss") (ИРК)
                             </div>
                         }
                     </div>
@@ -50,11 +48,11 @@
             <div class="checklist-row @(item.IsCompleted ? "done" : "")" style="cursor:default;">
                 <span style="font-size:1.05rem;line-height:1.2;">@(item.IsCompleted ? "✅" : "⬜")</span>
                 <div style="flex:1;">
-                    <div style="font-weight:600;font-size:0.87rem;">Шаг @item.StepOrder. @item.Instruction</div>
+                    <div style="font-weight:650;font-size:.88rem;">Шаг @item.StepOrder. @item.Instruction</div>
                     @if (item.IsCompleted && item.CompletedAtUtc.HasValue)
                     {
-                        <div style="font-size:0.74rem;color:var(--accent-emerald);margin-top:0.15rem;">
-                            Выполнено: @item.CompletedBy • @item.CompletedAtUtc.Value.AddHours(8).ToString("HH:mm:ss") (ИРК)
+                        <div style="font-size:.76rem;color:var(--agro-primary);margin-top:.15rem;">
+                            Выполнено: @item.CompletedBy · @item.CompletedAtUtc.Value.AddHours(8).ToString("HH:mm:ss") (ИРК)
                         </div>
                     }
                 </div>

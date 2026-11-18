@@ -1,77 +1,104 @@
 @model Incident
 @{
     string sevBadge = Model.Severity >= IncidentSeverity.Critical
-        ? "mc-badge mc-badge-critical"
-        : "mc-badge mc-badge-warning";
+        ? "agro-badge agro-badge-danger"
+        : "agro-badge agro-badge-warn";
 
     string statusBadge = Model.Status == IncidentStatus.Resolved
-        ? "mc-badge mc-badge-optimal"
+        ? "agro-badge"
         : Model.Status == IncidentStatus.Open
-            ? "mc-badge mc-badge-critical"
-            : "mc-badge mc-badge-warning";
+            ? "agro-badge agro-badge-danger"
+            : "agro-badge agro-badge-warn";
 
     string statusLabel = Model.Status switch
     {
-        IncidentStatus.Resolved => "ЗАКРЫТ • УГРОЗА УСТРАНЕНА",
-        IncidentStatus.Mitigating => "ВЫПОЛНЯЮТСЯ МЕРЫ РЕГЛАМЕНТА",
-        IncidentStatus.Acknowledged => "ПРИНЯТ В РАБОТУ ДЕЖУРНОЙ СМЕНОЙ",
-        _ => "ОТКРЫТ • ТРЕБУЕТСЯ РЕАКЦИЯ СМЕНЫ"
+        IncidentStatus.Resolved => "Закрыт · нормализован",
+        IncidentStatus.Mitigating => "Выполняются меры регламента",
+        IncidentStatus.Acknowledged => "Принят в работу сменой",
+        _ => "Открыт · ожидает реакции"
     };
+
+    string StepClass(IncidentStatus target)
+    {
+        if (Model.Status == target) return "agro-step active";
+        if ((int)Model.Status > (int)target) return "agro-step done";
+        return "agro-step";
+    }
 }
 
-<div class="mc-card @(Model.IsActive ? "mc-card-critical" : "")" style="margin-bottom:1.1rem;">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+<!-- Пошаговый индикатор жизненного цикла инцидента (в стиле Stepper из ITS AgroVision V2) -->
+<div class="agro-stepper">
+    <div class="@StepClass(IncidentStatus.Open)">
+        <span class="agro-step-num">1</span>
+        <span>Открыт (фиксация аномалии)</span>
+    </div>
+    <span class="agro-step-arrow">→</span>
+    <div class="@StepClass(IncidentStatus.Acknowledged)">
+        <span class="agro-step-num">2</span>
+        <span>Принят сменой (Acknowledge)</span>
+    </div>
+    <span class="agro-step-arrow">→</span>
+    <div class="@StepClass(IncidentStatus.Mitigating)">
+        <span class="agro-step-num">3</span>
+        <span>Регламент устранения</span>
+    </div>
+    <span class="agro-step-arrow">→</span>
+    <div class="@StepClass(IncidentStatus.Resolved)">
+        <span class="agro-step-num">4</span>
+        <span>Закрыт и акт Postmortem PDF</span>
+    </div>
+</div>
+
+<div class="panel @(Model.IsActive ? "mc-card-critical" : "preview-highlight") mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
-            <div style="display:flex;align-items:center;gap:0.55rem;flex-wrap:wrap;">
-                <a href="/Incidents" class="mc-btn mc-btn-sm">← К журналу</a>
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                 <span class="@sevBadge">@Model.Severity</span>
                 <span class="@statusBadge" id="wr-status-badge">@statusLabel</span>
-                <span class="mc-badge mc-badge-info">@Model.TriggerType</span>
+                <span class="agro-badge agro-badge-info">@Model.TriggerType</span>
             </div>
 
-            <h1 style="margin:0.55rem 0 0.25rem;font-size:1.3rem;font-weight:800;">
-                @Model.IncidentNumber — @Model.Title
-            </h1>
-            <div style="font-size:0.84rem;color:var(--text-secondary);">
-                Объект: <strong style="color:var(--text-primary);">@Model.Zone?.Name</strong> (@Model.Zone?.LocationCampus) •
+            <h1 class="h3 fw-bold mb-1">@Model.IncidentNumber — @Model.Title</h1>
+            <div class="small text-muted">
+                Объект: <strong style="color:var(--agro-text);">@Model.Zone?.Name</strong> (@Model.Zone?.LocationCampus) ·
                 Открыт: <strong>@Model.OpenedAtUtc.AddHours(8).ToString("dd.MM.yyyy HH:mm:ss") (ИРК)</strong>
                 @if (!string.IsNullOrWhiteSpace(Model.AcknowledgedBy))
                 {
-                    <span> • В работе у: <strong>@Model.AcknowledgedBy</strong></span>
+                    <span> · Ответственный: <strong>@Model.AcknowledgedBy</strong></span>
                 }
             </div>
-            <div style="margin-top:0.45rem;font-size:0.86rem;color:var(--text-primary);">
-                <strong>Диагностика ядра:</strong> <span id="wr-summary-text">@Model.AlertSummary</span>
+            <div class="mt-2" style="font-size:.9rem;">
+                <strong>Сводка мониторинга:</strong> <span id="wr-summary-text">@Model.AlertSummary</span>
             </div>
         </div>
 
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.55rem;">
+        <div class="d-flex flex-column align-items-end gap-2">
             @if (Model.IsActive)
             {
-                <div class="tabular" style="background:var(--accent-red-soft);border:1px solid var(--accent-red);border-radius:10px;padding:0.5rem 0.9rem;text-align:right;">
-                    <div style="font-size:0.69rem;text-transform:uppercase;font-weight:700;color:var(--accent-red);">
-                        Запас времени до риска порчи продукции
+                <div class="tabular text-end p-2 px-3 rounded" style="background:var(--agro-danger-bg);border:1px solid var(--agro-danger);">
+                    <div style="font-size:.7rem;text-transform:uppercase;font-weight:700;color:var(--agro-danger);">
+                        Запас времени до риска порчи культуры
                     </div>
                     <div id="wr-survival-timer"
                          data-minutes="@Model.EstimatedMinutesToDamage"
-                         style="font-size:1.55rem;font-weight:900;color:var(--accent-red);">
+                         style="font-size:1.5rem;font-weight:800;color:var(--agro-danger);">
                         @Model.EstimatedMinutesToDamage:00 мин
                     </div>
                 </div>
             }
             else
             {
-                <div class="tabular" style="background:var(--accent-emerald-soft);border:1px solid var(--accent-emerald);border-radius:10px;padding:0.5rem 0.9rem;text-align:right;">
-                    <div style="font-size:0.7rem;text-transform:uppercase;font-weight:700;color:var(--accent-emerald);">
-                        Инцидент успешно закрыт
+                <div class="tabular text-end p-2 px-3 rounded" style="background:var(--agro-badge-bg);border:1px solid var(--agro-primary);">
+                    <div style="font-size:.7rem;text-transform:uppercase;font-weight:700;color:var(--agro-primary);">
+                        Инцидент закрыт
                     </div>
-                    <div style="font-size:1.05rem;font-weight:800;color:var(--accent-emerald);">
+                    <div style="font-size:1.1rem;font-weight:800;color:var(--agro-primary);">
                         MTTR: @(Model.MttrMinutes?.ToString("F1") ?? "—") мин
                     </div>
                 </div>
             }
 
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <div class="d-flex gap-2 flex-wrap">
                 @if (Model.Status == IncidentStatus.Open)
                 {
                     <form hx-post="/Incidents/Acknowledge/@Model.Id"
@@ -80,10 +107,10 @@
                           method="post"
                           action="/Incidents/Acknowledge/@Model.Id"
                           style="margin:0;">
-                        <button type="submit" class="mc-btn mc-btn-amber">✋ Взять в работу (Acknowledge)</button>
+                        <button type="submit" class="btn btn-warning btn-sm fw-bold">✋ Взять в работу (Acknowledge)</button>
                     </form>
                 }
-                <a href="/Incidents/PostmortemPdf/@Model.Id" class="mc-btn mc-btn-primary">
+                <a href="/Incidents/PostmortemPdf/@Model.Id" class="btn btn-primary btn-sm">
                     📄 Выгрузить акт Postmortem PDF
                 </a>
             </div>

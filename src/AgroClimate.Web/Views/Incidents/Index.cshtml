@@ -3,60 +3,64 @@
     ViewData["Title"] = "Журнал инцидентов и War Room";
 }
 
-<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+<header class="page-header">
     <div>
-        <h1 style="margin:0;font-size:1.28rem;font-weight:800;">🚨 Центр управления инцидентами (Incident War Room)</h1>
-        <div style="font-size:0.82rem;color:var(--text-secondary);">
-            Жизненный цикл аварий микроклимата ИрГАУ, регламенты реагирования дежурной смены и выгрузка актов Postmortem PDF
-        </div>
+        <p class="eyebrow">Оперативное управление угрозами микроклимата</p>
+        <h1>Incident War Room</h1>
+        <p class="page-description">Единый реестр активных и завершённых климатических инцидентов ИрГАУ с контролем времени реакции (MTTA), регламентами дежурной смены и выгрузкой неизменяемых актов расследования Postmortem PDF.</p>
     </div>
-    <a href="/" class="mc-btn">🎛 Запустить аварийный сценарий на карте</a>
-</div>
+    <div class="header-actions">
+        <a href="/Analytics" class="btn btn-outline-primary">Аналитика SLA и трендов</a>
+        <a href="/" class="btn btn-primary">Стенд сценариев на карте</a>
+    </div>
+</header>
 
-<div class="kpi-grid tabular">
-    <div class="kpi-tile">
-        <div class="kpi-label">Активные тревоги</div>
-        <div class="kpi-value" style="color:@(Model.ActiveCount > 0 ? "var(--accent-red)" : "var(--accent-emerald)");">
-            @Model.ActiveCount
-        </div>
-        <div class="kpi-sub">Открытые комнаты оперативного реагирования</div>
-    </div>
-    <div class="kpi-tile">
-        <div class="kpi-label">Устранено в архиве</div>
-        <div class="kpi-value">@Model.ResolvedCount</div>
-        <div class="kpi-sub">Доступны полные Postmortem PDF-акты ИрГАУ</div>
-    </div>
-    <div class="kpi-tile">
-        <div class="kpi-label">Среднее время реакции (MTTA)</div>
-        <div class="kpi-value" style="color:var(--accent-cyan);">@Model.AvgMttaMinutes.ToString("F1") мин</div>
-        <div class="kpi-sub">От открытия тревоги до Acknowledge сменой</div>
-    </div>
-    <div class="kpi-tile">
-        <div class="kpi-label">Среднее время устранения (MTTR)</div>
-        <div class="kpi-value" style="color:var(--accent-emerald);">@Model.AvgMttrMinutes.ToString("F1") мин</div>
-        <div class="kpi-sub">Полная стабилизация зеленого коридора</div>
-    </div>
-</div>
+<section class="analysis-summary mb-4">
+    <article>
+        <span>Активные тревоги</span>
+        <strong style="color:@(Model.ActiveCount > 0 ? "var(--agro-danger)" : "var(--agro-primary)");">@Model.ActiveCount</strong>
+        <small>открытые комнаты оперативного реагирования</small>
+    </article>
+    <article>
+        <span>Устранено в архиве</span>
+        <strong>@Model.ResolvedCount</strong>
+        <small>доступны подписанные Postmortem PDF-акты</small>
+    </article>
+    <article>
+        <span>Средняя реакция (MTTA)</span>
+        <strong>@Model.AvgMttaMinutes.ToString("F1") мин</strong>
+        <small>от открытия тревоги до Acknowledge сменой</small>
+    </article>
+    <article>
+        <span>Среднее устранение (MTTR)</span>
+        <strong>@Model.AvgMttrMinutes.ToString("F1") мин</strong>
+        <small>возврат в зелёный агрономический коридор</small>
+    </article>
+</section>
 
-<!-- Панель фильтрации на HTMX -->
-<div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;flex-wrap:wrap;margin-bottom:0.85rem;">
-    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;" id="inc-filter-group">
-        <button type="button" class="mc-btn mc-btn-sm @(Model.StatusFilter == "all" ? "mc-btn-primary" : "")"
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="mode-tabs" id="inc-filter-group">
+        <button type="button" class="mode-tab-btn @(Model.StatusFilter == "all" ? "active" : "")"
                 hx-get="/Incidents/ListPartial?status=all" hx-target="#incidents-table-host" hx-swap="innerHTML"
-                onclick="highlightIncFilter(this)">Все инциденты</button>
-        <button type="button" class="mc-btn mc-btn-sm @(Model.StatusFilter == "active" ? "mc-btn-primary" : "")"
+                onclick="highlightIncFilter(this)">Все запуски и инциденты</button>
+        <button type="button" class="mode-tab-btn @(Model.StatusFilter == "active" ? "active" : "")"
                 hx-get="/Incidents/ListPartial?status=active" hx-target="#incidents-table-host" hx-swap="innerHTML"
-                onclick="highlightIncFilter(this)">🔥 Только активные</button>
-        <button type="button" class="mc-btn mc-btn-sm @(Model.StatusFilter == "resolved" ? "mc-btn-primary" : "")"
+                onclick="highlightIncFilter(this)">Активные тревоги</button>
+        <button type="button" class="mode-tab-btn @(Model.StatusFilter == "resolved" ? "active" : "")"
                 hx-get="/Incidents/ListPartial?status=resolved" hx-target="#incidents-table-host" hx-swap="innerHTML"
-                onclick="highlightIncFilter(this)">✅ Архив завершенных</button>
-        <button type="button" class="mc-btn mc-btn-sm"
+                onclick="highlightIncFilter(this)">Архив завершённых</button>
+        <button type="button" class="mode-tab-btn"
                 hx-get="/Incidents/ListPartial?status=all&severity=Emergency" hx-target="#incidents-table-host" hx-swap="innerHTML"
-                onclick="highlightIncFilter(this)">⚡ Emergency</button>
-        <button type="button" class="mc-btn mc-btn-sm"
+                onclick="highlightIncFilter(this)">Emergency</button>
+        <button type="button" class="mode-tab-btn"
                 hx-get="/Incidents/ListPartial?status=all&severity=Critical" hx-target="#incidents-table-host" hx-swap="innerHTML"
-                onclick="highlightIncFilter(this)">🔴 Critical</button>
+                onclick="highlightIncFilter(this)">Critical</button>
     </div>
+
+    <input type="search" class="form-control form-control-sm" style="width:280px;"
+           placeholder="Быстрый фильтр по объекту, коду или тексту…"
+           data-table-filter="incidentsRegistryTable"
+           aria-label="Фильтр по журналу инцидентов" />
 </div>
 
 <div id="incidents-table-host">
@@ -66,8 +70,8 @@
 @section Scripts {
     <script>
         function highlightIncFilter(btn) {
-            document.querySelectorAll("#inc-filter-group .mc-btn").forEach(b => b.classList.remove("mc-btn-primary"));
-            btn.classList.add("mc-btn-primary");
+            document.querySelectorAll("#inc-filter-group .mode-tab-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
         }
     </script>
 }
